@@ -1,0 +1,83 @@
+name: Deploy Growth Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY-PROD to confirm'
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-growth-prod
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'DEPLOY-PROD'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Rsync code to Prod directory on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh "ec2-user@${EC2_HOST}" 'mkdir -p /home/ec2-user/growth/prod'
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude '.env*' \
+            ./ "ec2-user@${EC2_HOST}:/home/ec2-user/growth/prod/"
+
+      - name: Install, migrate, build, restart (Prod)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh "ec2-user@${EC2_HOST}" bash <<'REMOTE_EOF'
+            set -euo pipefail
+            source ~/.nvm/nvm.sh
+            nvm use default
+
+            cd /home/ec2-user/growth/prod/apps/web
+
+            ln -sf /home/ec2-user/growth/.env.production .env
+
+            pnpm install --frozen-lockfile
+            pnpm exec prisma generate
+            pnpm exec prisma db push --skip-generate --accept-data-loss
+            pnpm build
+
+            pm2 delete growth-web-prod 2>/dev/null || true
+            pm2 delete growth-worker-prod 2>/dev/null || true
+            pm2 start /home/ec2-user/growth/prod/infra/ecosystem.growth.config.js \
+              --only growth-web-prod,growth-worker-prod --update-env
+            pm2 save
+          REMOTE_EOF
+
+      - name: Smoke check (PM2 + HTTP)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh "ec2-user@${EC2_HOST}" \
+            "pm2 list | grep growth-web-prod | grep -q online && pm2 list | grep growth-worker-prod | grep -q online" \
+            && echo "Prod pm2: web+worker ONLINE" \
+            || (echo "Prod pm2: web or worker NOT ONLINE" && exit 1)
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://growth.korrali.com/login || echo "000")
+          [ "$STATUS" = "200" ] \
+            && echo "Prod HTTP: $STATUS" \
+            || (echo "Prod HTTP: $STATUS (expected 200)" && exit 1)

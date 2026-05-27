@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# Env files — never commit; truth files live on the server
+.env
+.env.local
+.env.*.local
+*.env
+
+# Prisma generated client
+apps/web/node_modules/.prisma/
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+.playwright/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# PM2 logs (local)
+logs/
+*.log
+npm-debug.log*
+
+# TypeScript build info
+*.tsbuildinfo

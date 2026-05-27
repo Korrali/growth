@@ -1,0 +1,523 @@
+// Korrali Growth — internal distribution and growth operations platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Core: Organization + User + Membership ──────────────────────────────────
+
+model Organization {
+  id        String       @id @default(cuid())
+  name      String
+  slug      String       @unique
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  members   Membership[]
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime     @default(now())
+  memberships   Membership[]
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Membership {
+  id     String       @id @default(cuid())
+  orgId  String
+  userId String
+  role   Role         @default(MEMBER)
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ─── NextAuth standard tables ─────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Growth enums ─────────────────────────────────────────────────────────────
+
+enum FitProduct {
+  TRUST
+  REVENUE
+  BOTH
+  REJECT
+}
+
+enum CampaignProduct {
+  TRUST
+  REVENUE
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum OutreachStatus {
+  PENDING
+  ACTIVE
+  REPLIED
+  UNSUBSCRIBED
+  BOUNCED
+  COMPLETED
+  STOPPED
+}
+
+enum EmailStatus {
+  UNVERIFIED
+  VALID
+  INVALID
+  CATCH_ALL
+  DISPOSABLE
+}
+
+enum SuppressionReason {
+  UNSUBSCRIBED
+  BOUNCED
+  MANUAL
+  COMPETITOR
+  DOMAIN_SUPPRESSED
+}
+
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum ReplyCategory {
+  INTERESTED
+  NOT_NOW
+  WRONG_PERSON
+  OBJECTION
+  UNSUBSCRIBE
+  BOUNCE
+  AUTO_REPLY
+  NEGATIVE
+  OTHER
+}
+
+enum SuppressionType {
+  EMAIL
+  DOMAIN
+}
+
+enum CtaType {
+  DEMO_REQUEST
+  QUICK_CALL
+  REPLY_QUESTION
+  SOFT_CLOSE
+  BREAKUP
+}
+
+enum TrialStatus {
+  ACTIVE
+  CONVERTED
+  CHURNED
+  EXPIRED
+}
+
+enum ActivationRisk {
+  UNKNOWN
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ContentType {
+  LINKEDIN_POST
+  BLOG_OUTLINE
+  OBJECTION_HANDLER
+  CASE_STUDY_DRAFT
+  EMAIL_TEMPLATE
+}
+
+// ─── Growth Settings (singleton) ─────────────────────────────────────────────
+
+model GrowthSettings {
+  id                  String   @id @default("global")
+  globalEmergencyStop Boolean  @default(true)
+  defaultDailyLimit   Int      @default(20)
+  defaultPerDomainLimit Int    @default(1)
+  updatedAt           DateTime @updatedAt
+}
+
+// ─── Companies + Contacts ─────────────────────────────────────────────────────
+
+model Company {
+  id                      String          @id @default(cuid())
+  name                    String
+  domain                  String          @unique
+  website                 String?
+  description             String?
+  industry                String?
+  employeeCount           Int?
+  detectedTechs           String[]
+  fitProduct              FitProduct?
+  fitScore                Int?
+  painHypothesis          String?
+  trigger                 String?
+  personalizedObservation String?
+  recommendedCta          String?
+  fitReasoning            String?
+  fitScoredAt             DateTime?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  contacts                Contact[]
+  outreaches              Outreach[]
+  scoringRuns             ScoringRun[]
+  calls                   Call[]
+  partnerContacts         PartnerContact[]
+
+  @@index([fitProduct, fitScore])
+}
+
+model Contact {
+  id             String            @id @default(cuid())
+  companyId      String?
+  email          String            @unique
+  firstName      String?
+  lastName       String?
+  title          String?
+  linkedinUrl    String?
+  emailStatus    EmailStatus       @default(UNVERIFIED)
+  suppressedAt   DateTime?
+  suppressReason SuppressionReason?
+  buyerPersona   String?
+  isBuyer        Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  company        Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  outreaches     Outreach[]
+  emailMessages  EmailMessage[]
+  calls          Call[]
+  emailGenerationRuns EmailGenerationRun[]
+
+  @@index([companyId])
+  @@index([emailStatus])
+}
+
+// ─── Campaigns + Sequences ────────────────────────────────────────────────────
+
+model Campaign {
+  id               String          @id @default(cuid())
+  name             String
+  product          CampaignProduct
+  status           CampaignStatus  @default(DRAFT)
+  dailyLimit       Int             @default(20)
+  perDomainLimit   Int             @default(1)
+  sendWindowStart  Int             @default(8)   // hour of day (local timezone)
+  sendWindowEnd    Int             @default(18)
+  timezone         String          @default("America/New_York")
+  maxFollowUps     Int             @default(3)
+  testMode         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  sequenceSteps    SequenceStep[]
+  outreaches       Outreach[]
+  emailGenerationRuns EmailGenerationRun[]
+
+  @@index([status])
+}
+
+// Campaign-level reusable templates — never written by AI email generation
+model SequenceStep {
+  id              String    @id @default(cuid())
+  campaignId      String
+  stepNumber      Int
+  delayDays       Int
+  subjectTemplate String
+  bodyTemplate    String
+  ctaType         CtaType   @default(DEMO_REQUEST)
+  createdAt       DateTime  @default(now())
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, stepNumber])
+}
+
+// ─── Outreach ─────────────────────────────────────────────────────────────────
+
+model Outreach {
+  id            String         @id @default(cuid())
+  contactId     String
+  companyId     String?
+  campaignId    String
+  status        OutreachStatus @default(PENDING)
+  currentStep   Int            @default(0)
+  nextSendAt    DateTime?
+  stoppedAt     DateTime?
+  stoppedReason String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  contact       Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  company       Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  campaign      Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  emailDrafts   OutreachEmailDraft[]
+  emailMessages EmailMessage[]
+  calls         Call[]
+  emailGenerationRuns EmailGenerationRun[]
+
+  @@unique([contactId, campaignId])
+  @@index([status, nextSendAt])
+}
+
+// Per-contact AI-personalized email drafts — written by email-generator, NOT SequenceStep
+model OutreachEmailDraft {
+  id                  String    @id @default(cuid())
+  outreachId          String
+  stepNumber          Int
+  subject             String
+  body                String
+  relevanceScore      Int?
+  personalizationScore Int?
+  riskScore           Int?
+  qualityGates        Json?
+  approvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  outreach            Outreach  @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+
+  @@unique([outreachId, stepNumber])
+}
+
+// ─── Email Messages ───────────────────────────────────────────────────────────
+
+model EmailMessage {
+  id               String           @id @default(cuid())
+  outreachId       String?
+  contactId        String
+  direction        MessageDirection
+  subject          String?
+  body             String
+  resendMessageId  String?          @unique
+  sentAt           DateTime?
+  bouncedAt        DateTime?
+  stepNumber       Int?
+  createdAt        DateTime         @default(now())
+  contact          Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  outreach         Outreach?        @relation(fields: [outreachId], references: [id], onDelete: SetNull)
+  replyClassification ReplyClassification?
+
+  @@index([contactId, direction])
+  // Partial unique index for outbound double-send prevention:
+  // CREATE UNIQUE INDEX email_message_outbound_step ON "EmailMessage"("outreachId", "stepNumber") WHERE direction = 'OUTBOUND'
+  // Run this as raw SQL after first db push
+}
+
+model ReplyClassification {
+  id           String        @id @default(cuid())
+  messageId    String        @unique
+  category     ReplyCategory
+  priority     Int
+  founderDraft String?
+  createdAt    DateTime      @default(now())
+  message      EmailMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+// ─── Suppression ──────────────────────────────────────────────────────────────
+
+model Suppression {
+  id        String          @id @default(cuid())
+  type      SuppressionType
+  value     String          @unique
+  reason    SuppressionReason?
+  createdAt DateTime        @default(now())
+
+  @@index([type, value])
+}
+
+// ─── Calls ────────────────────────────────────────────────────────────────────
+
+model Call {
+  id            String    @id @default(cuid())
+  contactId     String
+  outreachId    String?
+  companyId     String?
+  scheduledAt   DateTime?
+  notes         String?
+  transcript    String?
+  brief         String?
+  followUpEmail String?
+  actionItems   String[]
+  nextStep      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  contact       Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  outreach      Outreach? @relation(fields: [outreachId], references: [id], onDelete: SetNull)
+  company       Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([contactId])
+}
+
+// ─── Trials ───────────────────────────────────────────────────────────────────
+
+model Trial {
+  id                 String          @id @default(cuid())
+  product            CampaignProduct
+  externalOrgId      String
+  companyName        String
+  contactEmail       String
+  trialStartedAt     DateTime
+  trialEndsAt        DateTime
+  status             TrialStatus     @default(ACTIVE)
+  hasLogin           Boolean         @default(false)
+  hasKbFacts         Boolean         @default(false)
+  hasAnsweredQ       Boolean         @default(false)
+  hasTrustPage       Boolean         @default(false)
+  hasStripeConnected Boolean         @default(false)
+  hasSeenAnomaly     Boolean         @default(false)
+  activationRisk     ActivationRisk  @default(UNKNOWN)
+  interventionsSent  Int             @default(0)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([status, activationRisk])
+}
+
+// ─── Growth Insights ──────────────────────────────────────────────────────────
+
+model GrowthInsight {
+  id              String   @id @default(cuid())
+  weekOf          DateTime @unique
+  summary         String
+  bestSegments    Json
+  bestSubjectLines Json
+  topObjections   Json
+  recommendations Json
+  rawStats        Json
+  createdAt       DateTime @default(now())
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([action])
+}
+
+// ─── Partner Contacts ─────────────────────────────────────────────────────────
+
+model PartnerContact {
+  id          String   @id @default(cuid())
+  companyId   String?
+  email       String   @unique
+  name        String?
+  title       String?
+  partnerType String?
+  fitScore    Int?
+  status      String   @default("prospect")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+}
+
+// ─── Content Drafts ───────────────────────────────────────────────────────────
+
+model ContentDraft {
+  id         String      @id @default(cuid())
+  type       ContentType
+  title      String?
+  body       String
+  status     String      @default("draft")
+  sourceData Json?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+// ─── AI Run Audit Records ─────────────────────────────────────────────────────
+
+model ScoringRun {
+  id         String   @id @default(cuid())
+  companyId  String
+  model      String
+  inputData  Json
+  outputData Json?
+  error      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model EmailGenerationRun {
+  id          String    @id @default(cuid())
+  outreachId  String?
+  contactId   String
+  campaignId  String
+  model       String
+  inputData   Json
+  outputData  Json?
+  qualityGates Json?
+  error       String?
+  createdAt   DateTime  @default(now())
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  outreach    Outreach? @relation(fields: [outreachId], references: [id], onDelete: SetNull)
+  campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+}

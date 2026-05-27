@@ -1,0 +1,108 @@
+name: Deploy Growth UAT
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'infra/**'
+      - '.github/workflows/deploy-uat.yml'
+
+concurrency:
+  group: deploy-growth-uat
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - run: pnpm exec prisma generate
+      - name: Run unit tests
+        run: pnpm test
+      - name: Verify build
+        run: pnpm build
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          NEXTAUTH_SECRET: ci-placeholder-secret-32chars-long
+          NEXTAUTH_URL: http://localhost:3000
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Rsync code to UAT directory on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh "ec2-user@${EC2_HOST}" 'mkdir -p /home/ec2-user/growth/uat'
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude '.env*' \
+            ./ "ec2-user@${EC2_HOST}:/home/ec2-user/growth/uat/"
+
+      - name: Install, migrate, build, restart (UAT)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh "ec2-user@${EC2_HOST}" bash <<'REMOTE_EOF'
+            set -euo pipefail
+            source ~/.nvm/nvm.sh
+            nvm use default
+
+            cd /home/ec2-user/growth/uat/apps/web
+
+            ln -sf /home/ec2-user/growth/.env.uat .env
+
+            pnpm install --frozen-lockfile
+            pnpm exec prisma generate
+            pnpm exec prisma db push --skip-generate --accept-data-loss
+            pnpm build
+
+            pm2 delete growth-web-uat 2>/dev/null || true
+            pm2 delete growth-worker-uat 2>/dev/null || true
+            pm2 start /home/ec2-user/growth/uat/infra/ecosystem.growth.config.js \
+              --only growth-web-uat,growth-worker-uat --update-env
+            pm2 save
+          REMOTE_EOF
+
+      - name: Smoke check (PM2 status)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh "ec2-user@${EC2_HOST}" \
+            "pm2 list | grep growth-web-uat | grep -q online && pm2 list | grep growth-worker-uat | grep -q online" \
+            && echo "UAT deploy: web+worker ONLINE" \
+            || (echo "UAT deploy: web or worker NOT ONLINE" && exit 1)
