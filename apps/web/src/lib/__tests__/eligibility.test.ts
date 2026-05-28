@@ -64,8 +64,9 @@ function mockAll() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  delete process.env.QUIET_HOURS_START;
-  delete process.env.QUIET_HOURS_END;
+  // 0–0 → isInQuietHours(0,0) is always false — tests must be wall-clock-independent
+  process.env.QUIET_HOURS_START = "0";
+  process.env.QUIET_HOURS_END = "0";
   mockAll();
 });
 
