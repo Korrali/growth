@@ -15,7 +15,7 @@ export class ForbiddenError extends Error {
 }
 
 const ROLE_RANK: Record<Role, number> = {
-  OWNER: 3,
+  SUPER_ADMIN: 3,
   ADMIN: 2,
   MEMBER: 1,
 };
