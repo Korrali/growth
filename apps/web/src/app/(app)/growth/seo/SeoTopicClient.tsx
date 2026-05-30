@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { discoverSeoTopicsAction, generateSeoArticleAction } from "@/lib/actions/seo";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { SeoTopic } from "@/lib/ai/seo-topic-analyzer";
 
 export function SeoTopicClient() {
+  const router = useRouter();
   const [topics, setTopics] = useState<SeoTopic[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [discovered, setDiscovered] = useState(false);
@@ -36,6 +38,7 @@ export function SeoTopicClient() {
     try {
       await generateSeoArticleAction(JSON.stringify(topic));
       setDone((d) => [...d, topic.targetKeyword]);
+      router.refresh();
     } catch (e) {
       setGenerateError(e instanceof Error ? e.message : String(e));
     } finally {
