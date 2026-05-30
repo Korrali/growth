@@ -9,6 +9,7 @@ import type { SeoTopic } from "@/lib/ai/seo-topic-analyzer";
 export function SeoTopicClient() {
   const [topics, setTopics] = useState<SeoTopic[]>([]);
   const [discovering, setDiscovering] = useState(false);
+  const [discovered, setDiscovered] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [done, setDone] = useState<string[]>([]);
 
@@ -17,6 +18,7 @@ export function SeoTopicClient() {
     try {
       const result = await discoverSeoTopicsAction();
       setTopics(result);
+      setDiscovered(true);
     } finally {
       setDiscovering(false);
     }
@@ -92,9 +94,14 @@ export function SeoTopicClient() {
         </div>
       )}
 
-      {topics.length === 0 && !discovering && (
+      {topics.length === 0 && !discovering && !discovered && (
         <p className="text-sm text-muted-foreground">
           Click "Discover SEO topics" to analyse community mentions and surface article opportunities.
+        </p>
+      )}
+      {topics.length === 0 && !discovering && discovered && (
+        <p className="text-sm text-muted-foreground">
+          No topics returned — try again or run a community scan first to populate mentions.
         </p>
       )}
     </div>
