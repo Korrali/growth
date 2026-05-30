@@ -10,14 +10,20 @@ export function SeoTopicClient() {
   const [topics, setTopics] = useState<SeoTopic[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [discovered, setDiscovered] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [done, setDone] = useState<string[]>([]);
 
   async function handleDiscover() {
     setDiscovering(true);
+    setError(null);
     try {
       const result = await discoverSeoTopicsAction();
       setTopics(result);
+      setDiscovered(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
       setDiscovered(true);
     } finally {
       setDiscovering(false);
@@ -26,9 +32,12 @@ export function SeoTopicClient() {
 
   async function handleGenerate(topic: SeoTopic) {
     setGenerating(topic.targetKeyword);
+    setGenerateError(null);
     try {
       await generateSeoArticleAction(JSON.stringify(topic));
       setDone((d) => [...d, topic.targetKeyword]);
+    } catch (e) {
+      setGenerateError(e instanceof Error ? e.message : String(e));
     } finally {
       setGenerating(null);
     }
@@ -94,12 +103,22 @@ export function SeoTopicClient() {
         </div>
       )}
 
+      {error && (
+        <p className="text-sm text-red-600 font-mono break-all border border-red-200 rounded p-2 bg-red-50">
+          Error: {error}
+        </p>
+      )}
+      {generateError && (
+        <p className="text-sm text-red-600 font-mono break-all border border-red-200 rounded p-2 bg-red-50">
+          Generate error: {generateError}
+        </p>
+      )}
       {topics.length === 0 && !discovering && !discovered && (
         <p className="text-sm text-muted-foreground">
           Click "Discover SEO topics" to analyse community mentions and surface article opportunities.
         </p>
       )}
-      {topics.length === 0 && !discovering && discovered && (
+      {topics.length === 0 && !discovering && discovered && !error && (
         <p className="text-sm text-muted-foreground">
           No topics returned — try again or run a community scan first to populate mentions.
         </p>
