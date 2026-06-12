@@ -6,11 +6,29 @@ import Link from "next/link";
 import { timeAgo } from "@/lib/utils";
 import { stopOutreachAction } from "@/lib/actions/outreach";
 
-export default async function OutreachPage() {
+export default async function OutreachPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   await requireOrgContext();
+  const { q } = await searchParams;
+  const query = q?.trim() || undefined;
 
   const outreaches = await prisma.outreach.findMany({
-    where: { status: { in: ["ACTIVE", "PENDING", "REPLIED"] } },
+    where: {
+      status: { in: ["ACTIVE", "PENDING", "REPLIED"] },
+      ...(query
+        ? {
+            OR: [
+              { contact: { email: { contains: query, mode: "insensitive" } } },
+              { contact: { firstName: { contains: query, mode: "insensitive" } } },
+              { contact: { lastName: { contains: query, mode: "insensitive" } } },
+              { company: { name: { contains: query, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
+    },
     orderBy: [{ status: "asc" }, { nextSendAt: "asc" }],
     take: 200,
     include: {
@@ -30,9 +48,34 @@ export default async function OutreachPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Active outreach</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{outreaches.length} in progress</p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Active outreach</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {outreaches.length} in progress
+            {query ? ` matching "${query}"` : ""}
+          </p>
+        </div>
+        <form method="GET" className="flex items-center gap-2">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query ?? ""}
+            placeholder="Filter by email, name, or company…"
+            className="h-9 w-72 rounded-md border border-input bg-background px-3 text-sm"
+          />
+          <button
+            type="submit"
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted"
+          >
+            Filter
+          </button>
+          {query && (
+            <Link href="/growth/outreach" className="text-xs text-muted-foreground hover:underline">
+              Clear
+            </Link>
+          )}
+        </form>
       </div>
 
       <Card>
