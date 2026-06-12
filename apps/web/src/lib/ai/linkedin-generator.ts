@@ -1,10 +1,12 @@
 import { anthropic } from "@/lib/ai/claude";
 import { HIGH_INTENT_MODEL } from "@/lib/ai/models";
+import { productCatalogueBlock } from "@/lib/products";
 
-const SYSTEM_PROMPT = `You are writing LinkedIn outreach copy for Ashish, founder of Korrali.
+const SYSTEM_PROMPT = `You are writing LinkedIn outreach copy for Ashish, founder of the product indicated by the contact's fitProduct.
 
-Korrali Trust helps AI-native B2B SaaS companies answer security questionnaires, generate compliance docs, and publish a trust center.
-Korrali Revenue detects failed payments and billing anomalies for subscription SaaS companies.
+${productCatalogueBlock()}
+
+Write as the founder of that specific product's brand (Korrali for TRUST/REVENUE/BOTH, BillClear for BILLCLEAR, MedScan for MEDSCAN).
 
 Write two pieces of copy:
 

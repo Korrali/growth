@@ -143,6 +143,14 @@ const QUERY_SET_A = [
   // Reddit — Revenue ICP intent signals
   `site:reddit.com r/stripe "failed payments" SaaS subscription`,
   `site:reddit.com r/SaaS "billing" Stripe subscription problem startup`,
+  // BillClear ICP — self-funded employers, benefits brokers, TPAs
+  `"self-funded" OR "self-insured" employer health plan benefits costs company`,
+  `benefits broker OR "benefits consultant" firm employer health plans clients`,
+  `"third-party administrator" OR TPA health benefits employer clients`,
+  `site:reddit.com r/humanresources "medical bills" OR "billing errors" employee benefits`,
+  // MedScan partnerships — telehealth, pharmacy, senior care
+  `telehealth OR "virtual care" startup medication management patients`,
+  `"senior care" OR "home care" company medication management caregivers`,
 ];
 
 const QUERY_SET_B = [
@@ -170,6 +178,14 @@ const QUERY_SET_B = [
   // Reddit — Revenue ICP intent signals
   `site:reddit.com r/startups "Stripe" billing subscription issue startup`,
   `site:reddit.com r/entrepreneurship "failed payments" OR "payment recovery" SaaS`,
+  // BillClear ICP — fresh angles
+  `employer "healthcare costs" self-funded plan benefits leader reduce spend`,
+  `"level-funded" OR "self-funded" health plan employer 100 1000 employees`,
+  `site:reddit.com r/benefits "surprise bill" OR "balance billing" employer plan`,
+  `HR tech platform employee benefits marketplace integrations partners`,
+  // MedScan partnerships — fresh angles
+  `pharmacy chain OR "independent pharmacy" patient app medication adherence`,
+  `caregiver platform OR "family caregiving" app medication tracking partnership`,
 ];
 
 // Pick the query set for this run: alternate weekly so consecutive daily runs use

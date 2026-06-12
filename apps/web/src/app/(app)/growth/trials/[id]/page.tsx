@@ -51,11 +51,13 @@ export default async function TrialDetailPage({ params }: Props) {
               <SignalRow label="Questionnaire answered" ok={trial.hasAnsweredQ} />
               <SignalRow label="Trust page published" ok={trial.hasTrustPage} />
             </>
-          ) : (
+          ) : trial.product === "REVENUE" ? (
             <>
               <SignalRow label="Stripe connected" ok={trial.hasStripeConnected} />
               <SignalRow label="Anomaly detected" ok={trial.hasSeenAnomaly} />
             </>
+          ) : (
+            <SignalRow label="Login" ok={trial.hasLogin} />
           )}
         </CardContent>
       </Card>

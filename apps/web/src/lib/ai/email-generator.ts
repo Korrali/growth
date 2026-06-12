@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
 import { WRITING_MODEL } from "@/lib/ai/models";
+import { PRODUCTS } from "@/lib/products";
+import type { CampaignProduct } from "@prisma/client";
 
 export interface GeneratedStep {
   stepNumber: number;
@@ -28,7 +30,12 @@ export function checkQualityGates(
   return { passed: blocked.length === 0, blockedReasons: blocked };
 }
 
-const SYSTEM_PROMPT = `You are Ashish, founder of Korrali. Write cold outbound emails founder-to-founder.
+function systemPromptFor(product: CampaignProduct): string {
+  const profile = PRODUCTS[product];
+  return `You are Ashish, founder of ${profile.brand}. Write cold outbound emails founder-to-founder.
+
+The product you are selling: **${profile.name}** — ${profile.oneLiner}
+The buyer: ${profile.buyers}
 
 Rules:
 - Reference only verifiable signals from the input data. Never imply research depth you cannot support.
@@ -41,6 +48,7 @@ Rules:
 For each step provide relevanceScore (1-10), personalizationScore (1-10), riskScore (1-10 where 1=safe, 10=risky/spammy).
 
 Respond with valid JSON only: an array of 4 objects.`;
+}
 
 const OUTPUT_SCHEMA = {
   type: "array" as const,
@@ -116,7 +124,7 @@ export async function generateEmailSequence(input: {
     const response = await anthropic.messages.create({
       model: WRITING_MODEL,
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
+      system: systemPromptFor(campaign.product),
       messages: [
         {
           role: "user",

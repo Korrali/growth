@@ -37,6 +37,8 @@ export default async function CompaniesPage() {
   const fitColors: Record<string, string> = {
     TRUST: "accent",
     REVENUE: "success",
+    BILLCLEAR: "accent",
+    MEDSCAN: "success",
     BOTH: "warning",
     REJECT: "destructive",
   };

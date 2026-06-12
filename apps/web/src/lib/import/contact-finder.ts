@@ -4,28 +4,9 @@ import { anthropic } from "@/lib/ai/claude";
 import { HIGH_INTENT_MODEL } from "@/lib/ai/models";
 import { enqueueEmailGenerate, enqueueOutreachSend } from "@/lib/queue";
 import type { FitProduct } from "@prisma/client";
+import { PRODUCTS, type MarketedProduct } from "@/lib/products";
 
 // ─── Persona targeting by product ────────────────────────────────────────────
-
-const TRUST_PERSONAS = [
-  '"head of security"',
-  '"ciso"',
-  '"vp security"',
-  '"security lead"',
-  '"head of trust"',
-  '"compliance manager"',
-  '"cto"',
-];
-
-const REVENUE_PERSONAS = [
-  '"vp engineering"',
-  '"head of engineering"',
-  '"revops"',
-  '"revenue operations"',
-  '"vp finance"',
-  '"head of finance"',
-  '"cto"',
-];
 
 // For companies < 50 employees always add founder/CEO
 const SMALL_CO_PERSONAS = ['"ceo"', '"founder"', '"co-founder"'];
@@ -48,7 +29,9 @@ function isBuyerTitle(title: string | null | undefined): boolean {
 }
 
 function personasForProduct(fitProduct: FitProduct, employeeCount: number | null): string[] {
-  const base = fitProduct === "TRUST" ? TRUST_PERSONAS : REVENUE_PERSONAS;
+  // BOTH = the Korrali pair; Trust personas lead because that campaign is preferred downstream
+  const key = fitProduct === "BOTH" ? "TRUST" : (fitProduct as MarketedProduct);
+  const base = PRODUCTS[key].personas;
   const isSmall = !employeeCount || employeeCount < 50;
   return isSmall ? [...SMALL_CO_PERSONAS, ...base] : base;
 }
@@ -193,7 +176,7 @@ async function autoEnqueueOutreach(
 ): Promise<boolean> {
   // Find a standing active campaign for this product
   // BOTH → prefer TRUST campaign; REJECT is already filtered upstream
-  const product = fitProduct === "BOTH" ? "TRUST" : (fitProduct as "TRUST" | "REVENUE");
+  const product = fitProduct === "BOTH" ? "TRUST" : (fitProduct as MarketedProduct);
 
   const campaign = await prisma.campaign.findFirst({
     where: { product, status: "ACTIVE" },

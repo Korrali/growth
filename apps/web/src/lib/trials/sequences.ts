@@ -130,6 +130,115 @@ Ashish`,
   },
 ];
 
+const BILLCLEAR_SEQUENCE: TrialEmailTemplate[] = [
+  {
+    subject: "Getting your BillClear pilot started",
+    body: `Hi there,
+
+Welcome to BillClear. The fastest way to see value is to run one real medical bill through the audit — yours or a volunteer employee's.
+
+Upload the bill (a phone photo works) and the audit comes back in under a minute: duplicate charges, upcoding, No Surprises Act violations, all itemised in dollars.
+
+Ashish`,
+  },
+  {
+    subject: "What the audit found — reading your first report",
+    body: `Hi there,
+
+Once you've run a bill, the report shows each flagged line item with the billing rule it violates and the dollar amount at stake.
+
+The dispute letter is generated from those findings — it cites the specific codes and regulations, which is what makes providers respond.
+
+If your first bill came back clean, that's normal for ~half of bills. Try one from a hospital visit or ER — error rates there are much higher.
+
+Ashish`,
+  },
+  {
+    subject: "Rolling BillClear out to your employees",
+    body: `Hi there,
+
+The pilot works best when 5–10 employees run real bills through it in the first two weeks. That's usually enough to surface a few hundred dollars in errors — the number that makes the benefits case internally.
+
+I can set up a short intro note you can forward to your team. Want me to send it over?
+
+Ashish`,
+  },
+  {
+    subject: "Measuring what BillClear saves your plan",
+    body: `Hi there,
+
+A few things benefits teams find most useful in the dashboard:
+
+- Total dollars disputed and recovered across your employees
+- Certified-mail tracking on every dispute letter sent
+- Per-dispute status so nothing silently stalls
+
+If you're self-funded, recovered billing errors flow straight back to your plan spend.
+
+Ashish`,
+  },
+  {
+    subject: "Checking in on your BillClear pilot",
+    body: `Hi there,
+
+Quick check-in — have your employees had a chance to run real bills through BillClear yet?
+
+If uptake is the blocker, the fix is usually a one-line mention in your benefits newsletter or Slack. Happy to draft it, or jump on a call about anything else in the way.
+
+Ashish`,
+  },
+];
+
+const MEDSCAN_SEQUENCE: TrialEmailTemplate[] = [
+  {
+    subject: "Trying MedScan with your users",
+    body: `Hi there,
+
+Thanks for exploring a MedScan partnership. The quickest way to evaluate it: scan any medicine bottle with the app — identification, FDA label data, and interaction checks come back in seconds.
+
+That's the experience your users or patients would get from day one.
+
+Ashish`,
+  },
+  {
+    subject: "Where MedScan fits in your service",
+    body: `Hi there,
+
+Partners typically slot MedScan in at the moment of confusion: a caregiver sorting a parent's medications, a patient unsure if two prescriptions clash, a discharge handover with six new bottles.
+
+A recommendation from you at that moment is what drives adoption — and it costs your team nothing to support.
+
+Ashish`,
+  },
+  {
+    subject: "What a MedScan partnership looks like",
+    body: `Hi there,
+
+The simplest partnership is a recommendation: MedScan in your resource list, onboarding materials, or app. For deeper integrations (co-branded experience, referral tracking), we can scope what fits your platform.
+
+Worth a short call to figure out which shape makes sense?
+
+Ashish`,
+  },
+  {
+    subject: "Checking in on MedScan",
+    body: `Hi there,
+
+Quick check-in — did you get a chance to try the app with a few real medicine bottles?
+
+If anything felt off for your user base (label data depth, interaction coverage, accessibility), that feedback directly shapes what we build next.
+
+Ashish`,
+  },
+];
+
+const SEQUENCES: Record<CampaignProduct, TrialEmailTemplate[]> = {
+  TRUST: TRUST_SEQUENCE,
+  REVENUE: REVENUE_SEQUENCE,
+  BILLCLEAR: BILLCLEAR_SEQUENCE,
+  MEDSCAN: MEDSCAN_SEQUENCE,
+};
+
 export function getTrialSequence(product: CampaignProduct): TrialEmailTemplate[] {
-  return product === CampaignProduct.TRUST ? TRUST_SEQUENCE : REVENUE_SEQUENCE;
+  return SEQUENCES[product];
 }

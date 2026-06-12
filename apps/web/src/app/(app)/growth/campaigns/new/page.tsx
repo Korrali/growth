@@ -43,6 +43,8 @@ export default async function NewCampaignPage() {
                 <option value="">Select product</option>
                 <option value="TRUST">Korrali Trust</option>
                 <option value="REVENUE">Korrali Revenue</option>
+                <option value="BILLCLEAR">BillClear</option>
+                <option value="MEDSCAN">MedScan</option>
               </select>
             </div>
             <SubmitButton loadingLabel="Creating…">Create campaign</SubmitButton>

@@ -90,13 +90,17 @@ model VerificationToken {
 enum FitProduct {
   TRUST
   REVENUE
-  BOTH
+  BILLCLEAR
+  MEDSCAN
+  BOTH // Trust + Revenue (the Korrali pair)
   REJECT
 }
 
 enum CampaignProduct {
   TRUST
   REVENUE
+  BILLCLEAR
+  MEDSCAN
 }
 
 enum CampaignStatus {

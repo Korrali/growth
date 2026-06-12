@@ -4,20 +4,7 @@ import { WRITING_MODEL } from "@/lib/ai/models";
 import { ContentType } from "@prisma/client";
 import type { SeoTopic } from "./seo-topic-analyzer";
 
-const PRODUCT_CONTEXT = {
-  TRUST: {
-    name: "Korrali Trust",
-    url: "https://trust.korrali.com",
-    description: "AI-powered compliance workspace — answer security questionnaires in minutes, auto-generate SOC2/ISO27001 policies, and publish a public trust center.",
-    cta: "Start your free trial at trust.korrali.com",
-  },
-  REVENUE: {
-    name: "Korrali Revenue",
-    url: "https://revenue.korrali.com",
-    description: "Revenue intelligence for Stripe SaaS — detects failed payments, duplicate charges, and billing anomalies before they compound into real leakage.",
-    cta: "See your revenue health for free at revenue.korrali.com",
-  },
-};
+import { PRODUCTS } from "@/lib/products";
 
 function slugify(title: string): string {
   return title
@@ -29,13 +16,13 @@ function slugify(title: string): string {
 }
 
 export async function generateSeoArticle(topic: SeoTopic): Promise<string> {
-  const ctx = PRODUCT_CONTEXT[topic.product];
+  const ctx = PRODUCTS[topic.product];
 
   const response = await anthropic.messages.create({
     model: WRITING_MODEL,
     max_tokens: 4096,
-    system: `You are a B2B SaaS content writer specialising in SEO-optimised long-form articles. Your articles:
-- Are 1,500–2,000 words, written for founders and engineering leads
+    system: `You are a content writer specialising in SEO-optimised long-form articles. Your articles:
+- Are 1,500–2,000 words, written for the product's actual audience (stated below)
 - Use plain, direct language — no marketing fluff
 - Include the target keyword naturally in: H1, first paragraph, 2-3 subheadings, and conclusion
 - Structure: intro (problem), body (3-4 H2 sections with practical depth), conclusion + CTA
@@ -50,8 +37,9 @@ export async function generateSeoArticle(topic: SeoTopic): Promise<string> {
 Target keyword: "${topic.targetKeyword}"
 Title: ${topic.suggestedTitle}
 Search intent: ${topic.searchIntent}
-Product to mention: ${ctx.name} — ${ctx.description}
-CTA line: ${ctx.cta}
+Product to mention: ${ctx.name} — ${ctx.oneLiner}
+Audience: ${ctx.buyers}
+CTA line: ${ctx.seoCta}
 
 Write the complete article in Markdown now. Start directly with the H1.`,
       },

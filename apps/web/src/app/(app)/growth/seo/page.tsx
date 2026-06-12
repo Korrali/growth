@@ -1,5 +1,6 @@
 import { requireOrgContext } from "@/lib/org-context";
 import { prisma } from "@/lib/db";
+import { PRODUCTS, type MarketedProduct } from "@/lib/products";
 import { ContentType } from "@prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -103,7 +104,7 @@ export default async function SeoPage() {
                       </a>
                       {a.slug && (
                         <a
-                          href={`https://${a.product === "TRUST" ? "trust" : "revenue"}.korrali.com/blog/${a.slug}`}
+                          href={`${PRODUCTS[a.product as MarketedProduct]?.url ?? "https://korrali.com"}/blog/${a.slug}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs text-muted-foreground hover:underline"

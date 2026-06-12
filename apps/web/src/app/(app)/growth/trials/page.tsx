@@ -60,7 +60,11 @@ export default async function TrialsPage() {
                     { label: "Stripe connected", ok: t.hasStripeConnected },
                     { label: "Anomaly seen", ok: t.hasSeenAnomaly },
                   ];
-                  const signals = t.product === "TRUST" ? trustSignals : revSignals;
+                  const loginSignals = [{ label: "Login", ok: t.hasLogin }];
+                  const signals =
+                    t.product === "TRUST" ? trustSignals :
+                    t.product === "REVENUE" ? revSignals :
+                    loginSignals;
 
                   return (
                     <tr key={t.id} className="border-t border-border hover:bg-muted/30">

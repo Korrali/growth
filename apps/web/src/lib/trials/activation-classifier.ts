@@ -33,5 +33,9 @@ export function classifyActivationRisk(trial: TrialData): ActivationRisk {
     return ActivationRisk.UNKNOWN;
   }
 
+  // BILLCLEAR / MEDSCAN trials have no in-product signals wired up yet — login is
+  // the only observable. Tighten this once their activation events are tracked.
+  if (!trial.hasLogin && age >= 3) return ActivationRisk.CRITICAL;
+  if (trial.hasLogin) return ActivationRisk.LOW;
   return ActivationRisk.UNKNOWN;
 }

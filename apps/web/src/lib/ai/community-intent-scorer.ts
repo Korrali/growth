@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
 import { BULK_MODEL } from "@/lib/ai/models";
 import type { CommunitySource } from "@prisma/client";
+import { MARKETED_PRODUCT_KEYS, productCatalogueBlock } from "@/lib/products";
 
 const SOURCE_LABEL: Record<CommunitySource, string> = {
   REDDIT:        "Reddit",
@@ -9,19 +10,17 @@ const SOURCE_LABEL: Record<CommunitySource, string> = {
   INDIE_HACKERS: "Indie Hackers",
 };
 
-const SYSTEM_PROMPT = `You are scoring community posts for intent signals relevant to two B2B SaaS products:
+const SYSTEM_PROMPT = `You are scoring community posts for intent signals relevant to these products:
 
-**Korrali Trust** — Helps B2B SaaS companies answer security/privacy questionnaires, generate compliance docs, and publish a trust page.
+${productCatalogueBlock()}
 
-**Korrali Revenue** — Detects failed payments, billing anomalies, and revenue leakage for subscription SaaS companies.
-
-Score 1–10 how likely the post author needs one of these products RIGHT NOW based on their post.
+Score 1–10 how likely the post author needs one of these products RIGHT NOW based on their post. For MEDSCAN, consumer posts count too (confused about medications, caregiving for a parent, pill identification).
 
 If score >= 7, also write 3 distinct reply comment variations:
 - Each 2-4 sentences
 - Address the OP directly (use their username as u/{author} or reference their specific situation)
 - Each variation takes a different angle (analogy / concrete step / clarifying question)
-- Never name Korrali or include product links
+- Never name the product or company, and never include product links
 - One variation may end with "happy to share how we solved this — DM me"
 
 Respond with valid JSON only.`;
@@ -31,7 +30,7 @@ const OUTPUT_SCHEMA = {
   properties: {
     intentScore:   { type: "number", description: "1-10 intent signal strength" },
     intentReason:  { type: "string", description: "Why this post signals intent" },
-    icpSignal:     { type: "string", enum: ["TRUST", "REVENUE", "BOTH", "NONE"] },
+    icpSignal:     { type: "string", enum: [...MARKETED_PRODUCT_KEYS, "BOTH", "NONE"] },
     replyVariants: {
       type: "array",
       items: { type: "string" },

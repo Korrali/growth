@@ -11,14 +11,14 @@
     ]
   },
   "scripts": {
-    "dev": "pnpm --filter web dev",
-    "build": "pnpm --filter web build",
-    "test": "pnpm --filter web test",
-    "lint": "pnpm --filter web lint",
-    "typecheck": "pnpm --filter web typecheck",
-    "db:migrate": "pnpm --filter web db:migrate",
-    "db:generate": "pnpm --filter web db:generate",
-    "worker": "pnpm --filter web worker"
+    "dev": "pnpm --filter growth-web dev",
+    "build": "pnpm --filter growth-web build",
+    "test": "pnpm --filter growth-web test",
+    "lint": "pnpm --filter growth-web lint",
+    "typecheck": "pnpm --filter growth-web typecheck",
+    "db:migrate": "pnpm --filter growth-web db:migrate",
+    "db:generate": "pnpm --filter growth-web db:generate",
+    "worker": "pnpm --filter growth-web worker"
   },
   "packageManager": "pnpm@10.33.4"
 }
