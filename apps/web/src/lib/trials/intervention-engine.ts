@@ -14,7 +14,12 @@ async function sendTrialEmail(
   const fromName = brand === "Korrali"
     ? (process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali")
     : `Ashish from ${brand}`;
-  const fromEmail = process.env.EMAIL_FROM ?? "Ashish from Korrali <growth@korrali.com>";
+  // EMAIL_FROM may be a bare address or a full "Name <email>" — extract the
+  // bare address so we never produce a nested, invalid from field.
+  const rawFrom = process.env.EMAIL_FROM ?? "growth@korrali.com";
+  const fromEmail = rawFrom.includes("<")
+    ? (rawFrom.match(/<([^>]+)>/)?.[1] ?? rawFrom)
+    : rawFrom;
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
