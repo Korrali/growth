@@ -4,6 +4,7 @@ import { renderTemplate } from "@/lib/sending/template-renderer";
 import { generateUnsubscribeToken } from "@/lib/sending/unsubscribe-token";
 import { scheduleNextStep } from "@/lib/sending/sequence-scheduler";
 import { injectUtmIntoText } from "@/lib/utm";
+import { PRODUCTS } from "@/lib/products";
 
 export interface SendResult {
   sent: boolean;
@@ -91,9 +92,13 @@ export async function sendOutreachStep(
   });
   const bodyWithFooter = bodyWithUtm + footer;
 
-  // Send via Resend
-  const fromName = process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali";
-  const fromEmail = process.env.GROWTH_FROM_EMAIL ?? "ashish@outreach.korrali.com";
+  // Send via Resend — sender name follows the campaign's product brand so a
+  // BillClear email isn't signed "from Korrali"; the address is shared.
+  const brand = PRODUCTS[outreach.campaign.product].brand;
+  const fromName = brand === "Korrali"
+    ? (process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali")
+    : `Ashish from ${brand}`;
+  const fromEmail = process.env.GROWTH_FROM_EMAIL ?? "outreach@korrali.com";
   const inboundDomain = process.env.RESEND_INBOUND_DOMAIN ?? "reply.outreach.korrali.com";
 
   const payload = {
