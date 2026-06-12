@@ -41,6 +41,8 @@ export interface ReplyClassifyPayload {
 export interface TrialInterventionPayload {
   trialId: string;
   dayBucket: string;
+  /** True = post-expiry win-back email instead of an activation intervention. */
+  winback?: boolean;
 }
 
 export interface WeeklyInsightsPayload {
@@ -140,7 +142,7 @@ export async function enqueueTrialIntervention(
 ): Promise<string | null> {
   const boss = await getBoss();
   return boss.send(QUEUE_NAMES.TRIAL_INTERVENTION, payload, {
-    singletonKey: `trial-intervention-${payload.trialId}-${payload.dayBucket}`,
+    singletonKey: `trial-${payload.winback ? "winback" : "intervention"}-${payload.trialId}-${payload.dayBucket}`,
     retryLimit: 2,
     retryDelay: 60,
     expireInSeconds: 60 * 60,

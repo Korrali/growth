@@ -242,3 +242,113 @@ const SEQUENCES: Record<CampaignProduct, TrialEmailTemplate[]> = {
 export function getTrialSequence(product: CampaignProduct): TrialEmailTemplate[] {
   return SEQUENCES[product];
 }
+
+// ─── Post-expiry win-back ─────────────────────────────────────────────────────
+// Step 0 sends ~1 day after expiry, step 1 ~7 days after. Tone: useful, not
+// desperate — the offer to extend does most of the work.
+
+const TRUST_WINBACK: TrialEmailTemplate[] = [
+  {
+    subject: "Your Korrali trial ended — want another week?",
+    body: `Hi there,
+
+Your 14-day Korrali Trust trial just ended. If you were mid-way through a questionnaire or didn't get a real one through the system yet, that's a bad place to stop evaluating.
+
+Reply to this email and I'll extend your trial a week — no card needed.
+
+If you're ready instead, the annual plans now include 2 months free.
+
+Ashish`,
+  },
+  {
+    subject: "Closing the loop on Korrali",
+    body: `Hi there,
+
+I'll stop emailing after this one. Before I do: if Korrali Trust didn't fit, I'd genuinely like to know what was missing — questionnaire format, pricing, something else. One line is plenty.
+
+And if the timing was just wrong, your knowledge base is still saved. Reply whenever an enterprise questionnaire lands in your inbox and I'll reactivate you the same day.
+
+Ashish`,
+  },
+];
+
+const REVENUE_WINBACK: TrialEmailTemplate[] = [
+  {
+    subject: "Your Revenue trial ended — leaks don't stop, though",
+    body: `Hi there,
+
+Your Korrali Revenue trial just ended. Whatever was leaking in your Stripe account before you connected it is still leaking now — failed payments and quiet lapses don't pause because the trial did.
+
+Reply and I'll extend you a week so you can see a full billing cycle of detection.
+
+Ashish`,
+  },
+  {
+    subject: "Closing the loop on Revenue monitoring",
+    body: `Hi there,
+
+Last email from me. If the anomalies we flagged during your trial didn't justify the price, that's a fair outcome — but if you simply didn't get time to look, the dashboard snapshot from your trial is still there.
+
+Reply whenever billing health makes it back up your list and I'll reactivate your account.
+
+Ashish`,
+  },
+];
+
+const BILLCLEAR_WINBACK: TrialEmailTemplate[] = [
+  {
+    subject: "Your BillClear pilot ended — one more bill?",
+    body: `Hi there,
+
+Your BillClear pilot just wrapped. If your employees didn't get many real bills through it, the savings number you saw understates what a full rollout finds.
+
+Reply and I'll extend the pilot two weeks — enough for one more payroll cycle of bills.
+
+Ashish`,
+  },
+  {
+    subject: "Closing the loop on BillClear",
+    body: `Hi there,
+
+Last note from me. If BillClear didn't earn a place in your benefits stack, I'd value one line on why — coverage, employee uptake, or the numbers themselves.
+
+If it's a budget-cycle thing, reply when your next benefits planning window opens and we'll pick the pilot back up.
+
+Ashish`,
+  },
+];
+
+const MEDSCAN_WINBACK: TrialEmailTemplate[] = [
+  {
+    subject: "Still open to a MedScan partnership?",
+    body: `Hi there,
+
+Our partnership conversation went quiet — that's usually timing, not interest. If your users are still photographing pill bottles and Googling drug interactions, the problem hasn't gone anywhere.
+
+Reply and we'll pick it up where we left off.
+
+Ashish`,
+  },
+  {
+    subject: "Closing the loop on MedScan",
+    body: `Hi there,
+
+I'll close this thread after today. If a medication-safety integration isn't on your roadmap, no hard feelings — and if it comes back around next planning cycle, you know where to find me.
+
+Ashish`,
+  },
+];
+
+const WINBACK_SEQUENCES: Record<CampaignProduct, TrialEmailTemplate[]> = {
+  TRUST: TRUST_WINBACK,
+  REVENUE: REVENUE_WINBACK,
+  BILLCLEAR: BILLCLEAR_WINBACK,
+  MEDSCAN: MEDSCAN_WINBACK,
+};
+
+export function getWinbackSequence(product: CampaignProduct): TrialEmailTemplate[] {
+  return WINBACK_SEQUENCES[product];
+}
+
+/** Days after expiry at which each win-back step becomes due. */
+export const WINBACK_SCHEDULE_DAYS = [1, 7] as const;

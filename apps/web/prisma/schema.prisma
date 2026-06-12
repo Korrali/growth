@@ -462,6 +462,8 @@ model Trial {
   hasSeenAnomaly     Boolean         @default(false)
   activationRisk     ActivationRisk  @default(UNKNOWN)
   interventionsSent  Int             @default(0)
+  winbacksSent       Int             @default(0)
+  expiredAt          DateTime?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 

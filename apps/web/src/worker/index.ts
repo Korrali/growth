@@ -5,7 +5,8 @@ import { scoreFitForCompany } from "@/lib/ai/fit-scorer";
 import { generateEmailSequence } from "@/lib/ai/email-generator";
 import { classifyReply } from "@/lib/ai/reply-classifier";
 import { generateCallBrief, generateCallFollowup } from "@/lib/ai/call-briefer";
-import { runTrialIntervention } from "@/lib/trials/intervention-engine";
+import { runTrialIntervention, runTrialWinback } from "@/lib/trials/intervention-engine";
+import { WINBACK_SCHEDULE_DAYS } from "@/lib/trials/sequences";
 import { generateWeeklyInsights } from "@/lib/ai/weekly-insights";
 import { generateContent } from "@/lib/ai/content-generator";
 import { distributeContent } from "@/lib/content/distributor";
@@ -186,14 +187,19 @@ async function main() {
     },
   );
 
-  // Trial intervention handler
-  await boss.work<{ trialId: string; dayBucket: string }>(
+  // Trial intervention handler (activation nudges + post-expiry win-backs)
+  await boss.work<{ trialId: string; dayBucket: string; winback?: boolean }>(
     QUEUE_NAMES.TRIAL_INTERVENTION,
     { batchSize: 1, localConcurrency: 1 },
     async ([job]) => {
       if (!job) return;
-      console.log(`[worker] trial.intervention ${job.data.trialId}`);
-      await runTrialIntervention(job.data.trialId);
+      if (job.data.winback) {
+        console.log(`[worker] trial.winback ${job.data.trialId}`);
+        await runTrialWinback(job.data.trialId);
+      } else {
+        console.log(`[worker] trial.intervention ${job.data.trialId}`);
+        await runTrialIntervention(job.data.trialId);
+      }
     },
   );
 
@@ -275,9 +281,18 @@ async function main() {
     console.log("[cron] weekly-insights-trigger: enqueued");
   });
 
-  // Daily 7am UTC: check HIGH/CRITICAL trials and enqueue interventions
+  // Daily 7am UTC: expire overdue trials, nudge at-risk ones, win-back expired ones
   await boss.work("trial-daily-check", async ([job]) => {
     if (!job) return;
+    const now = new Date();
+
+    // 1. ACTIVE trials past their end date become EXPIRED (win-back eligible)
+    const expired = await prisma.trial.updateMany({
+      where: { status: "ACTIVE", trialEndsAt: { lt: now } },
+      data: { status: "EXPIRED", expiredAt: now },
+    });
+
+    // 2. Activation interventions for at-risk active trials
     const atRisk = await prisma.trial.findMany({
       where: {
         status: "ACTIVE",
@@ -286,13 +301,35 @@ async function main() {
       select: { id: true },
     });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = now.toISOString().slice(0, 10);
     for (const t of atRisk) {
       await enqueueTrialIntervention({ trialId: t.id, dayBucket: today });
     }
 
-    if (atRisk.length > 0) {
-      console.log(`[cron] trial-daily-check: enqueued ${atRisk.length} interventions`);
+    // 3. Win-backs: step N due WINBACK_SCHEDULE_DAYS[N] days after expiry
+    const expiredTrials = await prisma.trial.findMany({
+      where: {
+        status: "EXPIRED",
+        winbacksSent: { lt: WINBACK_SCHEDULE_DAYS.length },
+        expiredAt: { not: null },
+      },
+      select: { id: true, winbacksSent: true, expiredAt: true },
+    });
+
+    let winbacksEnqueued = 0;
+    for (const t of expiredTrials) {
+      const dueDays = WINBACK_SCHEDULE_DAYS[t.winbacksSent];
+      const dueAt = new Date(t.expiredAt!.getTime() + dueDays * 24 * 60 * 60 * 1000);
+      if (dueAt <= now) {
+        await enqueueTrialIntervention({ trialId: t.id, dayBucket: today, winback: true });
+        winbacksEnqueued++;
+      }
+    }
+
+    if (expired.count + atRisk.length + winbacksEnqueued > 0) {
+      console.log(
+        `[cron] trial-daily-check: expired ${expired.count}, interventions ${atRisk.length}, winbacks ${winbacksEnqueued}`,
+      );
     }
   });
 
