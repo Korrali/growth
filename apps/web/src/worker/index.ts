@@ -386,6 +386,44 @@ async function main() {
     }
   });
 
+  // Tue + Thu 11am UTC: generate and publish up to 3 SEO articles from the
+  // cached topic queue — full autopilot, no founder click required. Articles
+  // go straight to "posted" and are served by /api/blog on each product site.
+  await boss.work("seo-auto-publish", async ([job]) => {
+    if (!job) return;
+    const { analyzeSeoTopics } = await import("@/lib/ai/seo-topic-analyzer");
+    const { generateSeoArticle, saveArticleDraft } = await import("@/lib/ai/seo-article-generator");
+
+    type CachedTopic = Awaited<ReturnType<typeof analyzeSeoTopics>>[number];
+    let topics: CachedTopic[] = [];
+    const cache = await prisma.contentDraft.findUnique({ where: { slug: "__seo_topics__" } });
+    if (cache?.body) {
+      try { topics = JSON.parse(cache.body) as CachedTopic[]; } catch { /* fall through */ }
+    }
+    if (topics.length === 0) topics = await analyzeSeoTopics();
+
+    const existing = await prisma.contentDraft.findMany({
+      where: { type: ContentType.BLOG_POST, targetKeyword: { not: null } },
+      select: { targetKeyword: true },
+    });
+    const covered = new Set(existing.map((e) => e.targetKeyword));
+    const todo = topics.filter((t) => !covered.has(t.targetKeyword)).slice(0, 3);
+
+    for (const topic of todo) {
+      try {
+        const body = await generateSeoArticle(topic);
+        const draftId = await saveArticleDraft(topic, body);
+        await prisma.contentDraft.update({
+          where: { id: draftId },
+          data: { status: "posted", postedAt: new Date() },
+        });
+        console.log(`[cron] seo-auto-publish: published "${topic.suggestedTitle}" (${topic.product})`);
+      } catch (err) {
+        console.error(`[cron] seo-auto-publish: failed "${topic.suggestedTitle}":`, err);
+      }
+    }
+  });
+
   // Every 30 min: check for content drafts due to distribute
   await boss.work("content-distribute-check", async ([job]) => {
     if (!job) return;
@@ -422,6 +460,7 @@ async function main() {
   await boss.schedule("seo-topic-refresh",        "0 10 * * 1");    // weekly Mon 10am UTC
   await boss.schedule("linkedin-draft-trigger",   "0 9 * * *");     // daily 9am UTC
   await boss.schedule("content-distribute-check", "*/30 * * * *");  // every 30 min
+  await boss.schedule("seo-auto-publish",         "0 11 * * 2,4");  // Tue + Thu 11am UTC — 6 articles/week
 
   console.log("[worker] all handlers registered, crons scheduled");
 }
