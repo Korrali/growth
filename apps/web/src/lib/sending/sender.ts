@@ -5,6 +5,7 @@ import { generateUnsubscribeToken } from "@/lib/sending/unsubscribe-token";
 import { scheduleNextStep } from "@/lib/sending/sequence-scheduler";
 import { injectUtmIntoText } from "@/lib/utm";
 import { PRODUCTS } from "@/lib/products";
+import { verifyEmail } from "@/lib/import/email-verifier";
 
 export interface SendResult {
   sent: boolean;
@@ -76,6 +77,51 @@ export async function sendOutreachStep(
 
   const contact = outreach.contact;
   const company = outreach.company;
+
+  // ── Final deliverability guard (belt-and-suspenders) ───────────────────────
+  // The contact finder verifies mailboxes at creation, but outreach queued
+  // BEFORE that fix can still point at a guessed address. Re-verify on the first
+  // send so already-queued guesses can't bounce and degrade domain reputation.
+  // Only step 1 needs this — follow-up steps only run after a deliverable step 1.
+  //   • undeliverable → suppress the contact (never retry a known-bad mailbox)
+  //   • unknown (incl. NO verification provider configured) → fail-closed: skip
+  //     WITHOUT suppressing, so the contact resumes once a provider key is set
+  //   • deliverable / risky (catch-all) → send
+  if (stepNumber === 1) {
+    const verdict = await verifyEmail(contact.email);
+    if (verdict === "undeliverable") {
+      await prisma.contact.update({
+        where: { id: contact.id },
+        data: { suppressedAt: new Date() },
+      }).catch(() => { /* contact may already be suppressed */ });
+      await prisma.auditLog.create({
+        data: {
+          actor: "system",
+          action: "outreach.skipped_undeliverable",
+          entity: "Outreach",
+          entityId: outreachId,
+          metadata: { stepNumber, email: contact.email, verdict },
+        },
+      });
+      return { sent: false, reason: "undeliverable" };
+    }
+    const sendable =
+      verdict === "deliverable" ||
+      verdict === "risky" ||
+      process.env.GROWTH_ALLOW_UNVERIFIED_SEND === "true";
+    if (!sendable) {
+      await prisma.auditLog.create({
+        data: {
+          actor: "system",
+          action: "outreach.skipped_unverified",
+          entity: "Outreach",
+          entityId: outreachId,
+          metadata: { stepNumber, email: contact.email, verdict },
+        },
+      });
+      return { sent: false, reason: `unverified:${verdict}` };
+    }
+  }
 
   // Build unsubscribe footer
   const appUrl = process.env.APP_URL ?? "";

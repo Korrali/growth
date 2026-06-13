@@ -5,6 +5,7 @@ import { HIGH_INTENT_MODEL } from "@/lib/ai/models";
 import { enqueueEmailGenerate, enqueueOutreachSend } from "@/lib/queue";
 import type { FitProduct } from "@prisma/client";
 import { PRODUCTS, type MarketedProduct } from "@/lib/products";
+import { pickDeliverableEmail } from "@/lib/import/email-verifier";
 
 // ─── Persona targeting by product ────────────────────────────────────────────
 
@@ -275,12 +276,32 @@ export async function findContactForCompany(companyId: string): Promise<void> {
     return;
   }
 
-  // Pick primary email pattern (firstname@domain is most common for B2B SaaS)
+  // Verify the mailbox BEFORE creating/sending. Blindly sending patterns[0] and
+  // letting bounces suppress invalids afterward destroyed sender reputation
+  // (~50% wrong guesses → hard bounces). Now we verify each candidate and send
+  // only a confirmed-deliverable (or, for catch-all domains, "risky") mailbox.
   const patterns = generateEmailPatterns(contact.firstName, contact.lastName, company.domain);
-  const primaryEmail = patterns[0];
-  if (!primaryEmail) return;
+  const picked = await pickDeliverableEmail(patterns);
+  if (!picked) {
+    await prisma.auditLog.create({
+      data: {
+        actor: "system",
+        action: "contact.find.unverified",
+        entity: "Company",
+        entityId: companyId,
+        metadata: {
+          companyName: company.name,
+          domain: company.domain,
+          candidatesTried: patterns.length,
+          reason: "no deliverable mailbox (or verification not configured — fail-closed)",
+        },
+      },
+    });
+    return;
+  }
+  const primaryEmail = picked.email;
 
-  // Create contact — bounce handling via existing Resend webhook suppresses invalids automatically
+  // Create contact — mailbox verified above; Resend bounce webhook remains a backup net
   const newContact = await prisma.contact.upsert({
     where: { email: primaryEmail },
     create: {
@@ -314,7 +335,7 @@ export async function findContactForCompany(companyId: string): Promise<void> {
         email: primaryEmail,
         title: contact.title,
         confidence: contact.confidence,
-        patternUsed: "firstname@domain",
+        verification: picked.result, // "deliverable" | "risky" | "unknown"
       },
     },
   });

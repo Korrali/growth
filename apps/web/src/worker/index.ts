@@ -50,6 +50,7 @@ async function main() {
     QUEUE_NAMES.COMPANY_DISCOVER, QUEUE_NAMES.CONTACT_FIND,
     "community-scan-trigger", "seo-topic-refresh", QUEUE_NAMES.COMMUNITY_SCAN,
     QUEUE_NAMES.LINKEDIN_DRAFT, QUEUE_NAMES.VISITOR_PROCESS,
+    "seo-auto-publish",
   ];
   for (const q of allQueues) {
     await boss.createQueue(q);
