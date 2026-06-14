@@ -1,4 +1,5 @@
 import { requireOrgContext } from "@/lib/org-context";
+import { prisma } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Label } from "@/components/ui/label";
@@ -7,6 +8,7 @@ import { redirect } from "next/navigation";
 
 export default async function NewCampaignPage() {
   await requireOrgContext();
+  const clients = await prisma.client.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 
   async function handleCreate(formData: FormData) {
     "use server";
@@ -48,6 +50,21 @@ export default async function NewCampaignPage() {
                 <option value="GROWTH_SERVICE">Growth Service (DFY SDR)</option>
               </select>
             </div>
+            {clients.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="clientId">Client (optional)</Label>
+                <select
+                  id="clientId"
+                  name="clientId"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                >
+                  <option value="">(none — internal campaign)</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <SubmitButton loadingLabel="Creating…">Create campaign</SubmitButton>
           </form>
         </CardContent>

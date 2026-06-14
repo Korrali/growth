@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { updateCampaignStatusAction, pauseCampaignAction } from "@/lib/actions/campaigns";
+import { Label } from "@/components/ui/label";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { updateCampaignStatusAction, pauseCampaignAction, updateCampaignClientAction } from "@/lib/actions/campaigns";
 import { CampaignStatus } from "@prisma/client";
 
 interface Props { params: Promise<{ id: string }> }
@@ -13,13 +15,17 @@ export default async function CampaignDetailPage({ params }: Props) {
   await requireOrgContext();
   const { id } = await params;
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id },
-    include: {
-      sequenceSteps: { orderBy: { stepNumber: "asc" } },
-      _count: { select: { outreaches: true } },
-    },
-  });
+  const [campaign, clients] = await Promise.all([
+    prisma.campaign.findUnique({
+      where: { id },
+      include: {
+        sequenceSteps: { orderBy: { stepNumber: "asc" } },
+        _count: { select: { outreaches: true } },
+        client: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.client.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ]);
 
   if (!campaign) notFound();
 
@@ -31,6 +37,11 @@ export default async function CampaignDetailPage({ params }: Props) {
   async function pauseCampaign() {
     "use server";
     await pauseCampaignAction(id);
+  }
+
+  async function handleClientUpdate(formData: FormData) {
+    "use server";
+    await updateCampaignClientAction(id, formData);
   }
 
   return (
@@ -65,6 +76,66 @@ export default async function CampaignDetailPage({ params }: Props) {
         <div><span className="text-muted-foreground">Timezone:</span> {campaign.timezone}</div>
         <div><span className="text-muted-foreground">Outreaches:</span> {campaign._count.outreaches}</div>
       </div>
+
+      {/* Client config */}
+      <Card>
+        <CardHeader><CardTitle>Client config</CardTitle></CardHeader>
+        <CardContent>
+          <form action={handleClientUpdate} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="clientId">Client</Label>
+              <select
+                id="clientId"
+                name="clientId"
+                defaultValue={campaign.client?.id ?? ""}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              >
+                <option value="">(none — internal campaign)</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">Link this campaign to a client to enable per-client sending identity and reply forwarding.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="fromName">From name override</Label>
+                <input
+                  id="fromName"
+                  name="fromName"
+                  defaultValue={campaign.fromName ?? ""}
+                  placeholder="John from Acme (leave blank to use client default)"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="fromEmail">From email override</Label>
+                <input
+                  id="fromEmail"
+                  name="fromEmail"
+                  type="email"
+                  defaultValue={campaign.fromEmail ?? ""}
+                  placeholder="john@getacme.com (leave blank to use client default)"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="replyForwardTo">Forward INTERESTED replies to</Label>
+              <input
+                id="replyForwardTo"
+                name="replyForwardTo"
+                type="email"
+                defaultValue={campaign.replyForwardTo ?? ""}
+                placeholder="founder@client.com (leave blank to skip forwarding)"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">Overrides the client&apos;s contactEmail for this specific campaign.</p>
+            </div>
+            <SubmitButton loadingLabel="Saving…">Save client config</SubmitButton>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>Sequence steps ({campaign.sequenceSteps.length})</CardTitle></CardHeader>
