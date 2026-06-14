@@ -15,7 +15,10 @@
     "db:generate": "prisma generate",
     "postinstall": "prisma generate",
     "worker": "tsx src/worker/index.ts",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:all": "pnpm test && pnpm test:e2e"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
@@ -35,6 +38,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
