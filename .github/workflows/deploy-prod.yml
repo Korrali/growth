@@ -82,3 +82,59 @@ jobs:
           [ "$STATUS" = "200" ] \
             && echo "Prod HTTP: $STATUS" \
             || (echo "Prod HTTP: $STATUS (expected 200)" && exit 1)
+
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for app ready (up to 60s)
+        run: |
+          for i in $(seq 1 12); do
+            STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://growth.korrali.com/login || echo "000")
+            echo "Attempt $i: /login → $STATUS"
+            [ "$STATUS" = "200" ] && break
+            sleep 5
+          done
+          [ "$STATUS" = "200" ] || (echo "App never came up" && exit 1)
+
+      - name: Google OAuth probe returns redirect (not 500)
+        run: |
+          STATUS=$(curl -sk -o /dev/null -w "%{http_code}" \
+            --max-redirs 0 https://growth.korrali.com/api/auth/signin/google || echo "000")
+          echo "/api/auth/signin/google → $STATUS"
+          [[ "$STATUS" == "302" || "$STATUS" == "303" || "$STATUS" == "200" ]] \
+            || (echo "Google auth broken: $STATUS" && exit 1)
+
+      - name: Protected routes redirect (not 500)
+        run: |
+          for path in /growth /growth/campaigns /growth/contacts /growth/inbox /growth/clients /growth/settings; do
+            STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://growth.korrali.com$path)
+            echo "$path → $STATUS"
+            [[ "$STATUS" == "200" || "$STATUS" == "307" || "$STATUS" == "302" ]] \
+              || (echo "Unexpected $STATUS for $path" && exit 1)
+          done
+
+      - name: API auth gates return 401/403
+        run: |
+          for path in /api/campaigns /api/contacts /api/companies /api/inbox /api/clients; do
+            STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://growth.korrali.com$path)
+            echo "$path → $STATUS"
+            [[ "$STATUS" == "401" || "$STATUS" == "403" || "$STATUS" == "404" ]] \
+              || (echo "Unprotected or broken: $path → $STATUS" && exit 1)
+          done
+
+      - name: Run Playwright smoke suite against prod
+        env:
+          E2E_BASE_URL: https://growth.korrali.com
+        run: |
+          cd apps/web
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install chromium --with-deps
+          pnpm exec playwright test \
+            src/e2e/auth.spec.ts \
+            src/e2e/app-routes.spec.ts \
+            --project=chromium \
+            --grep "auth gates|public routes|public API" \
+            --reporter=list
