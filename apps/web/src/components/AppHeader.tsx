@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { MobileNav } from "./MobileNav";
 import { ProfileMenu } from "./ProfileMenu";
+import { Settings } from "lucide-react";
 
 type NavKey =
   | "growth" | "companies" | "contacts" | "campaigns" | "outreach"
@@ -27,7 +28,7 @@ const NAV_ITEMS: { href: string; label: string; key: NavKey }[] = [
   { href: "/growth/community", label: "Community",  key: "community" },
   { href: "/growth/linkedin",  label: "LinkedIn",   key: "linkedin" },
   { href: "/growth/seo",       label: "SEO",        key: "seo" },
-  { href: "/growth/clients",    label: "Clients",    key: "clients" },
+  { href: "/growth/clients",   label: "Clients",    key: "clients" },
   { href: "/growth/settings",  label: "Settings",   key: "settings" },
 ];
 
@@ -62,6 +63,7 @@ export function AppHeader({ orgName, userEmail, currentPath }: Props) {
               <Link
                 key={item.key}
                 href={item.href}
+                title={item.label ?? "Settings"}
                 className={cn(
                   "whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
                   active
@@ -69,7 +71,7 @@ export function AppHeader({ orgName, userEmail, currentPath }: Props) {
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                {item.label}
+                {item.key === "settings" ? <Settings size={16} aria-label="Settings" /> : item.label}
               </Link>
             );
           })}
