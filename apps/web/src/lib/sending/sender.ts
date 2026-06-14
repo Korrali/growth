@@ -51,7 +51,12 @@ export async function sendOutreachStep(
     include: {
       contact: true,
       company: true,
-      campaign: { include: { sequenceSteps: { orderBy: { stepNumber: "asc" } } } },
+      campaign: {
+        include: {
+          client: true,
+          sequenceSteps: { orderBy: { stepNumber: "asc" } },
+        },
+      },
     },
   });
 
@@ -153,14 +158,23 @@ export async function sendOutreachStep(
   });
   const bodyWithFooter = bodyWithUtm + footer;
 
-  // Send via Resend — sender name follows the campaign's product brand so a
-  // BillClear email isn't signed "from Korrali"; the address is shared.
-  const brand = PRODUCTS[outreach.campaign.product].brand;
-  const fromName = brand === "Korrali"
-    ? (process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali")
-    : `Ashish from ${brand}`;
-  const fromEmail = process.env.GROWTH_FROM_EMAIL ?? "outreach@korrali.com";
-  const inboundDomain = process.env.RESEND_INBOUND_DOMAIN ?? "reply.outreach.korrali.com";
+  // Sender identity: per-campaign overrides take precedence over env defaults.
+  // Client campaigns set fromName/fromEmail so the email appears to come from
+  // the client's team. Internal campaigns fall back to the product brand.
+  const fromName = outreach.campaign.fromName
+    ?? (() => {
+      const product = PRODUCTS[outreach.campaign.product as keyof typeof PRODUCTS];
+      if (!product) return process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali";
+      return product.brand === "Korrali"
+        ? (process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali")
+        : `Ashish from ${product.brand}`;
+    })();
+  const fromEmail = outreach.campaign.fromEmail
+    ?? process.env.GROWTH_FROM_EMAIL
+    ?? "outreach@korrali.com";
+  const inboundDomain = outreach.campaign.client?.inboundDomain
+    ?? process.env.RESEND_INBOUND_DOMAIN
+    ?? "reply.outreach.korrali.com";
 
   const payload = {
     from: `${fromName} <${fromEmail}>`,

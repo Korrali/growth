@@ -45,6 +45,7 @@ export default async function NewCampaignPage() {
                 <option value="REVENUE">Korrali Revenue</option>
                 <option value="BILLCLEAR">BillClear</option>
                 <option value="MEDSCAN">MedScan</option>
+                <option value="GROWTH_SERVICE">Growth Service (DFY SDR)</option>
               </select>
             </div>
             <SubmitButton loadingLabel="Creating…">Create campaign</SubmitButton>

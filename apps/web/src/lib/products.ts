@@ -3,7 +3,7 @@
 // compose from this file, so adding or repositioning a product happens here
 // and nowhere else.
 
-export type MarketedProduct = "TRUST" | "REVENUE" | "BILLCLEAR" | "MEDSCAN";
+export type MarketedProduct = "TRUST" | "REVENUE" | "BILLCLEAR" | "MEDSCAN" | "GROWTH_SERVICE";
 
 export interface ProductProfile {
   key: MarketedProduct;
@@ -11,6 +11,7 @@ export interface ProductProfile {
   /** Brand the outreach is sent under — Korrali products share a sender identity. */
   brand: "Korrali" | "BillClear" | "MedScan";
   url: string;
+  /** For GROWTH_SERVICE and client campaigns: use campaign.customIcpProfile instead of this. */
   oneLiner: string;
   /** Fit-scoring guidance injected into the fit-scorer system prompt: good-fit signals + reject rules. */
   icp: string;
@@ -132,6 +133,26 @@ ALWAYS REJECT: ordinary B2B SaaS companies (no reason to care about medicine sca
     ],
     outboundViable: false,
     seoCta: "Scan any medicine free with MedScan — medscan.app",
+  },
+
+  GROWTH_SERVICE: {
+    key: "GROWTH_SERVICE",
+    name: "Korrali Growth Engine",
+    brand: "Korrali",
+    url: "https://korrali.com",
+    oneLiner:
+      "AI-powered done-for-you B2B outreach — we find your ICP, verify every email, and run personalized sequences so you wake up to interested replies.",
+    icp: `Good fit (score 6-10): B2B SaaS founders or co-founders with 2-20 employees, 6-36 months old, selling to other businesses, bootstrapped or seed-stage, no dedicated sales hire yet.
+
+Observable signals: recent ProductHunt launch, Indie Hackers post, Y Combinator batch, blog post about getting first customers, LinkedIn content about struggling with sales or outbound.
+
+Pain: no time for outbound, can't afford a $70K SDR, have tried cold email and either burned their domain or given up, rely entirely on inbound/referrals.
+
+ALWAYS REJECT: companies with a sales team (AE/SDR job titles visible on LinkedIn), agencies, non-SaaS businesses, consumer apps, companies that sell outbound/SDR tools themselves.`,
+    buyers: "Founders, co-founders of B2B SaaS startups.",
+    personas: ['"founder"', '"co-founder"', '"ceo"', '"cto"'],
+    outboundViable: true,
+    seoCta: "Book a 15-min demo at korrali.com",
   },
 };
 

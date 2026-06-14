@@ -6,7 +6,7 @@ import { ProfileMenu } from "./ProfileMenu";
 type NavKey =
   | "growth" | "companies" | "contacts" | "campaigns" | "outreach"
   | "inbox" | "calls" | "trials" | "content" | "community" | "linkedin"
-  | "seo" | "settings";
+  | "seo" | "settings" | "clients";
 
 interface Props {
   orgName: string;
@@ -27,6 +27,7 @@ const NAV_ITEMS: { href: string; label: string; key: NavKey }[] = [
   { href: "/growth/community", label: "Community",  key: "community" },
   { href: "/growth/linkedin",  label: "LinkedIn",   key: "linkedin" },
   { href: "/growth/seo",       label: "SEO",        key: "seo" },
+  { href: "/growth/clients",    label: "Clients",    key: "clients" },
   { href: "/growth/settings",  label: "Settings",   key: "settings" },
 ];
 

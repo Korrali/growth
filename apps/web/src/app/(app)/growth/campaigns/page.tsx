@@ -12,6 +12,7 @@ export default async function CampaignsPage() {
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { outreaches: true, sequenceSteps: true } },
+      client: { select: { id: true, name: true } },
     },
   });
 
@@ -44,6 +45,7 @@ export default async function CampaignsPage() {
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="px-6 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Client</th>
                   <th className="px-4 py-3 font-medium">Product</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Steps</th>
@@ -59,6 +61,15 @@ export default async function CampaignsPage() {
                       <Link href={`/growth/campaigns/${c.id}`} className="font-medium hover:underline">
                         {c.name}
                       </Link>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs">
+                      {c.client ? (
+                        <Link href={`/growth/clients/${c.client.id}`} className="text-accent hover:underline">
+                          {c.client.name}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
                       <Badge variant="accent">{c.product}</Badge>

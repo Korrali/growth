@@ -237,6 +237,7 @@ const SEQUENCES: Record<CampaignProduct, TrialEmailTemplate[]> = {
   REVENUE: REVENUE_SEQUENCE,
   BILLCLEAR: BILLCLEAR_SEQUENCE,
   MEDSCAN: MEDSCAN_SEQUENCE,
+  GROWTH_SERVICE: [],
 };
 
 export function getTrialSequence(product: CampaignProduct): TrialEmailTemplate[] {
@@ -344,6 +345,7 @@ const WINBACK_SEQUENCES: Record<CampaignProduct, TrialEmailTemplate[]> = {
   REVENUE: REVENUE_WINBACK,
   BILLCLEAR: BILLCLEAR_WINBACK,
   MEDSCAN: MEDSCAN_WINBACK,
+  GROWTH_SERVICE: [],
 };
 
 export function getWinbackSequence(product: CampaignProduct): TrialEmailTemplate[] {

@@ -52,7 +52,10 @@ const OUTPUT_SCHEMA = {
 export async function classifyReply(messageId: string) {
   const message = await prisma.emailMessage.findUniqueOrThrow({
     where: { id: messageId },
-    include: { contact: true, outreach: true },
+    include: {
+      contact: { include: { company: true } },
+      outreach: { include: { campaign: true } },
+    },
   });
 
   const response = await anthropic.messages.create({
@@ -117,6 +120,39 @@ export async function classifyReply(messageId: string) {
   // Schedule the deferred auto-send job for INTERESTED replies
   if (isInterested && autoSendAt && parsed.founderDraft) {
     await enqueueReplyAutoSend({ classificationId: classification.id }, autoSendAt);
+  }
+
+  // Forward INTERESTED replies to the client's inbox (fire-and-forget)
+  const replyForwardTo = message.outreach?.campaign.replyForwardTo;
+  if (isInterested && replyForwardTo) {
+    const contact = message.contact;
+    const company = contact.company;
+    const lines = [
+      `Contact: ${contact.firstName ?? ""} ${contact.lastName ?? ""} (${contact.email})`,
+      `Company: ${company?.name ?? "unknown"} (${company?.domain ?? ""})`,
+      `Title: ${contact.title ?? "unknown"}`,
+      "",
+      "--- Their reply ---",
+      message.body,
+      "",
+      "--- Suggested response (AI draft) ---",
+      parsed.founderDraft,
+      "",
+      `Reply directly to: ${contact.email}`,
+    ];
+    fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: process.env.EMAIL_FROM ?? "growth@korrali.com",
+        to: [replyForwardTo],
+        subject: `[INTERESTED] ${contact.firstName ?? contact.email} from ${company?.name ?? "unknown"} replied`,
+        text: lines.join("\n"),
+      }),
+    }).catch(() => {}); // best-effort — never block classification on forwarding
   }
 
   // Stop sequence and suppress for terminal categories

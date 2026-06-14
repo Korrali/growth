@@ -101,6 +101,18 @@ enum CampaignProduct {
   REVENUE
   BILLCLEAR
   MEDSCAN
+  GROWTH_SERVICE  // Meta-campaign selling DFY outreach; also used for external client campaigns
+}
+
+enum ClientPlan {
+  RETAINER       // setup fee + monthly flat
+  PAY_PER_MEETING // setup fee + per-qualified-meeting
+}
+
+enum ClientStatus {
+  ACTIVE
+  PAUSED
+  CHURNED
 }
 
 enum CampaignStatus {
@@ -208,6 +220,29 @@ enum LinkedInStatus {
   DEAD
 }
 
+// ─── External Clients (DFY SDR service) ──────────────────────────────────────
+
+model Client {
+  id                   String       @id @default(cuid())
+  name                 String
+  contactEmail         String       @unique
+  plan                 ClientPlan
+  status               ClientStatus @default(ACTIVE)
+  icpProfile           String       @db.Text
+  fromName             String
+  fromEmail            String
+  inboundDomain        String?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  setupFeeUsd          Int          @default(0)
+  monthlyFeeUsd        Int          @default(0)
+  perMeetingFeeUsd     Int          @default(0)
+  notes                String?      @db.Text
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  campaigns            Campaign[]
+}
+
 // ─── Growth Settings (singleton) ─────────────────────────────────────────────
 
 model GrowthSettings {
@@ -278,24 +313,32 @@ model Contact {
 // ─── Campaigns + Sequences ────────────────────────────────────────────────────
 
 model Campaign {
-  id               String          @id @default(cuid())
-  name             String
-  product          CampaignProduct
-  status           CampaignStatus  @default(DRAFT)
-  dailyLimit       Int             @default(20)
-  perDomainLimit   Int             @default(1)
-  sendWindowStart  Int             @default(8)   // hour of day (local timezone)
-  sendWindowEnd    Int             @default(18)
-  timezone         String          @default("America/New_York")
-  maxFollowUps     Int             @default(3)
-  testMode         Boolean         @default(true)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  sequenceSteps    SequenceStep[]
-  outreaches       Outreach[]
+  id                String          @id @default(cuid())
+  name              String
+  product           CampaignProduct
+  status            CampaignStatus  @default(DRAFT)
+  dailyLimit        Int             @default(20)
+  perDomainLimit    Int             @default(1)
+  sendWindowStart   Int             @default(8)   // hour of day (local timezone)
+  sendWindowEnd     Int             @default(18)
+  timezone          String          @default("America/New_York")
+  maxFollowUps      Int             @default(3)
+  testMode          Boolean         @default(true)
+  // External client config — null = Korrali internal campaign
+  clientId          String?
+  client            Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  replyForwardTo    String?         // client's inbox for INTERESTED forwarding; null = founder inbox
+  fromName          String?         // overrides GROWTH_FROM_NAME env var
+  fromEmail         String?         // overrides GROWTH_FROM_EMAIL env var
+  customIcpProfile  String?         @db.Text  // replaces products.ts ICP in email generator context
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  sequenceSteps     SequenceStep[]
+  outreaches        Outreach[]
   emailGenerationRuns EmailGenerationRun[]
 
   @@index([status])
+  @@index([clientId])
 }
 
 // Campaign-level reusable templates — never written by AI email generation

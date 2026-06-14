@@ -15,7 +15,7 @@ export default async function SettingsPage() {
     prisma.suppression.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
   ]);
 
-  const inboundDomain = process.env.RESEND_INBOUND_DOMAIN ?? "reply.outreach.korrali.com";
+  const inboundDomain = process.env.RESEND_INBOUND_DOMAIN ?? "reply.getkorrali.com";
   const appUrl = process.env.APP_URL ?? "(not set)";
 
   async function addSuppression(formData: FormData) {
