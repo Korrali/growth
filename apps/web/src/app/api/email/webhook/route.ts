@@ -5,22 +5,45 @@ import { stopOutreachSequence } from "@/lib/sending/sequence-scheduler";
 import { SuppressionReason } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "crypto";
 
-function verifySignature(payload: string, signature: string): boolean {
+// Resend uses Svix for webhook delivery. Svix signs with HMAC-SHA256 over
+// "{svix-id}.{svix-timestamp}.{body}" and base64-encodes the result.
+// The svix-signature header is "v1,{base64sig}" (possibly multiple, comma-separated).
+function verifyResendSignature(
+  payload: string,
+  svixId: string,
+  svixTimestamp: string,
+  svixSignature: string,
+): boolean {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
   if (!secret) return false;
-  const expected = createHmac("sha256", secret).update(payload).digest("hex");
-  try {
-    return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-  } catch {
-    return false;
+
+  // Strip the "whsec_" prefix Resend/Svix uses on the secret
+  const rawSecret = secret.startsWith("whsec_")
+    ? Buffer.from(secret.slice(6), "base64")
+    : Buffer.from(secret, "utf8");
+
+  const message = `${svixId}.${svixTimestamp}.${payload}`;
+  const expected = createHmac("sha256", rawSecret).update(message).digest("base64");
+
+  // svixSignature may be "v1,{base64}" or "v1,{b64} v1,{b64}" (multiple)
+  const signatures = svixSignature.split(" ").map((s) => s.split(",")[1]).filter(Boolean);
+  for (const sig of signatures) {
+    try {
+      if (timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return true;
+    } catch {
+      // length mismatch — keep trying
+    }
   }
+  return false;
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = await req.text();
-  const sig = req.headers.get("svix-signature") ?? req.headers.get("webhook-signature") ?? "";
+  const svixId = req.headers.get("svix-id") ?? "";
+  const svixTimestamp = req.headers.get("svix-timestamp") ?? "";
+  const svixSignature = req.headers.get("svix-signature") ?? "";
 
-  if (!verifySignature(body, sig)) {
+  if (!verifyResendSignature(body, svixId, svixTimestamp, svixSignature)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 

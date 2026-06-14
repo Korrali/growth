@@ -2,10 +2,19 @@ import { prisma } from "@/lib/db";
 import { checkSendEligibility } from "@/lib/sending/eligibility";
 import { renderTemplate } from "@/lib/sending/template-renderer";
 import { generateUnsubscribeToken } from "@/lib/sending/unsubscribe-token";
-import { scheduleNextStep } from "@/lib/sending/sequence-scheduler";
+import { scheduleNextStep, stopOutreachSequence } from "@/lib/sending/sequence-scheduler";
 import { injectUtmIntoText } from "@/lib/utm";
 import { PRODUCTS } from "@/lib/products";
 import { verifyEmail } from "@/lib/import/email-verifier";
+
+// Reasons that mean the outreach should be permanently stopped (never re-queued).
+const TERMINAL_ELIGIBILITY_REASONS = new Set([
+  "contact_suppressed",
+  "email_invalid",
+  "email_in_suppression_list",
+  "domain_suppressed",
+  "outreach_not_found",
+]);
 
 export interface SendResult {
   sent: boolean;
@@ -20,16 +29,21 @@ export async function sendOutreachStep(
   // Gate check
   const eligibility = await checkSendEligibility(outreachId, stepNumber);
   if (!eligibility.eligible) {
+    const reason = eligibility.reason ?? "unknown";
+    if (TERMINAL_ELIGIBILITY_REASONS.has(reason.split(":")[0])) {
+      // Terminal: move outreach to STOPPED so the cron never re-queues it.
+      await stopOutreachSequence(outreachId, reason).catch(() => {});
+    }
     await prisma.auditLog.create({
       data: {
         actor: "system",
         action: "outreach.skipped",
         entity: "Outreach",
         entityId: outreachId,
-        metadata: { stepNumber, reason: eligibility.reason },
+        metadata: { stepNumber, reason },
       },
     });
-    return { sent: false, reason: eligibility.reason };
+    return { sent: false, reason };
   }
 
   const outreach = await prisma.outreach.findUniqueOrThrow({
@@ -94,6 +108,7 @@ export async function sendOutreachStep(
         where: { id: contact.id },
         data: { suppressedAt: new Date() },
       }).catch(() => { /* contact may already be suppressed */ });
+      await stopOutreachSequence(outreachId, "undeliverable").catch(() => {});
       await prisma.auditLog.create({
         data: {
           actor: "system",
