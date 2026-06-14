@@ -1,23 +1,27 @@
 import { requireOrgContext } from "@/lib/org-context";
 import { prisma } from "@/lib/db";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { updateClientAction, updateClientStatusAction } from "@/lib/actions/clients";
+import { updateClientAction, updateClientStatusAction, sendSetupInvoiceAction } from "@/lib/actions/clients";
 import { ClientStatus } from "@prisma/client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-interface Props { params: Promise<{ id: string }> }
+interface Props {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ invoiceUrl?: string; invoiceSent?: string }>;
+}
 
 const inputCls =
   "flex w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
-export default async function ClientDetailPage({ params }: Props) {
+export default async function ClientDetailPage({ params, searchParams }: Props) {
   await requireOrgContext();
   const { id } = await params;
+  const { invoiceUrl, invoiceSent } = await searchParams;
 
   const client = await prisma.client.findUnique({
     where: { id },
@@ -87,6 +91,12 @@ export default async function ClientDetailPage({ params }: Props) {
     await updateClientStatusAction(id, ClientStatus.CHURNED);
   }
 
+  async function handleSendInvoice() {
+    "use server";
+    const { invoiceUrl: url } = await sendSetupInvoiceAction(id);
+    redirect(`/growth/clients/${id}?invoiceSent=1&invoiceUrl=${encodeURIComponent(url)}`);
+  }
+
   const statusColors: Record<string, string> = {
     ACTIVE: "success",
     PAUSED: "warning",
@@ -135,6 +145,72 @@ export default async function ClientDetailPage({ params }: Props) {
           )}
         </div>
       </div>
+
+      {/* Invoice sent banner */}
+      {invoiceSent && invoiceUrl && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
+          Setup invoice sent to <strong>{client.contactEmail}</strong>.{" "}
+          <a href={invoiceUrl} target="_blank" rel="noopener noreferrer" className="underline">
+            View in Stripe
+          </a>
+        </div>
+      )}
+
+      {/* Billing card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Billing</CardTitle>
+            {client.stripeCustomerId && (
+              <a
+                href={`https://dashboard.stripe.com/customers/${client.stripeCustomerId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground hover:underline"
+              >
+                {client.stripeCustomerId} →
+              </a>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-sm text-muted-foreground space-y-1">
+            <p>Setup fee: <span className="text-foreground font-medium">${client.setupFeeUsd.toLocaleString()}</span></p>
+            {client.plan === "RETAINER" ? (
+              <p>Monthly retainer: <span className="text-foreground font-medium">${client.monthlyFeeUsd.toLocaleString()}/mo</span></p>
+            ) : (
+              <p>Per-meeting fee: <span className="text-foreground font-medium">${client.perMeetingFeeUsd.toLocaleString()}/meeting</span></p>
+            )}
+          </div>
+          {!client.stripeCustomerId ? (
+            <form action={handleSendInvoice}>
+              <button
+                type="submit"
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                Send setup invoice (${client.setupFeeUsd.toLocaleString()})
+              </button>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Creates a Stripe customer + sends a hosted invoice to {client.contactEmail}.
+              </p>
+            </form>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Setup invoice already sent. Use the Stripe dashboard to create the recurring subscription after payment clears.
+              </p>
+              <form action={handleSendInvoice}>
+                <button
+                  type="submit"
+                  className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+                >
+                  Resend setup invoice
+                </button>
+              </form>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Edit form */}
       <form action={handleUpdate} className="space-y-6">

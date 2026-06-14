@@ -3,6 +3,7 @@
 import { requireRole } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { ClientPlan, ClientStatus } from "@prisma/client";
+import Stripe from "stripe";
 
 export async function createClientAction(formData: FormData): Promise<string> {
   await requireRole("ADMIN");
@@ -85,4 +86,55 @@ export async function updateClientStatusAction(
 ): Promise<void> {
   await requireRole("ADMIN");
   await prisma.client.update({ where: { id: clientId }, data: { status } });
+}
+
+export async function sendSetupInvoiceAction(
+  clientId: string,
+): Promise<{ invoiceUrl: string; invoiceId: string }> {
+  await requireRole("ADMIN");
+
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not configured");
+
+  const client = await prisma.client.findUnique({ where: { id: clientId } });
+  if (!client) throw new Error("Client not found");
+  if (client.setupFeeUsd === 0) throw new Error("Setup fee is $0 — update the client before sending");
+
+  const stripe = new Stripe(stripeKey);
+
+  // Create or reuse Stripe customer
+  let customerId = client.stripeCustomerId;
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      name: client.name,
+      email: client.contactEmail,
+      metadata: { growthClientId: clientId },
+    });
+    customerId = customer.id;
+    await prisma.client.update({ where: { id: clientId }, data: { stripeCustomerId: customerId } });
+  }
+
+  // Invoice for the one-time setup fee
+  await stripe.invoiceItems.create({
+    customer: customerId,
+    amount: client.setupFeeUsd * 100,
+    currency: "usd",
+    description: `Growth-as-Service Setup Fee — ${client.name}`,
+  });
+
+  const invoice = await stripe.invoices.create({
+    customer: customerId,
+    collection_method: "send_invoice",
+    days_until_due: 7,
+    auto_advance: true,
+    metadata: { growthClientId: clientId },
+  });
+
+  const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+  await stripe.invoices.sendInvoice(finalized.id);
+
+  return {
+    invoiceUrl: finalized.hosted_invoice_url ?? `https://dashboard.stripe.com/invoices/${finalized.id}`,
+    invoiceId: finalized.id,
+  };
 }
