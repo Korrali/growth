@@ -5,14 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { updateClientAction, updateClientStatusAction, sendSetupInvoiceAction } from "@/lib/actions/clients";
+import { updateClientAction, updateClientStatusAction, sendSetupInvoiceAction, sendRetainerInvoiceAction, sendMeetingInvoiceAction } from "@/lib/actions/clients";
 import { ClientStatus } from "@prisma/client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ invoiceUrl?: string; invoiceSent?: string }>;
+  searchParams: Promise<{ invoiceUrl?: string; invoiceSent?: string; invoiceType?: string }>;
 }
 
 const inputCls =
@@ -21,7 +21,7 @@ const inputCls =
 export default async function ClientDetailPage({ params, searchParams }: Props) {
   await requireOrgContext();
   const { id } = await params;
-  const { invoiceUrl, invoiceSent } = await searchParams;
+  const { invoiceUrl, invoiceSent, invoiceType } = await searchParams;
 
   const client = await prisma.client.findUnique({
     where: { id },
@@ -94,7 +94,13 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
   async function handleSendInvoice() {
     "use server";
     const { invoiceUrl: url } = await sendSetupInvoiceAction(id);
-    redirect(`/growth/clients/${id}?invoiceSent=1&invoiceUrl=${encodeURIComponent(url)}`);
+    redirect(`/growth/clients/${id}?invoiceSent=1&invoiceType=setup&invoiceUrl=${encodeURIComponent(url)}`);
+  }
+
+  async function handleSendRetainerInvoice() {
+    "use server";
+    const { invoiceUrl: url } = await sendRetainerInvoiceAction(id);
+    redirect(`/growth/clients/${id}?invoiceSent=1&invoiceType=retainer&invoiceUrl=${encodeURIComponent(url)}`);
   }
 
   const statusColors: Record<string, string> = {
@@ -149,9 +155,9 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
       {/* Invoice sent banner */}
       {invoiceSent && invoiceUrl && (
         <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
-          Setup invoice sent to <strong>{client.contactEmail}</strong>.{" "}
-          <a href={invoiceUrl} target="_blank" rel="noopener noreferrer" className="underline">
-            View in Stripe
+          {invoiceType === "retainer" ? "Monthly retainer" : invoiceType === "meeting" ? "Meeting" : "Setup"} invoice sent to <strong>{client.contactEmail}</strong>.{" "}
+          <a href={invoiceUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium">
+            View in Stripe →
           </a>
         </div>
       )}
@@ -173,42 +179,80 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
             )}
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p>Setup fee: <span className="text-foreground font-medium">${client.setupFeeUsd.toLocaleString()}</span></p>
+        <CardContent className="space-y-5">
+          {/* Fee summary */}
+          <div className="rounded-md bg-muted/50 px-4 py-3 text-sm space-y-1">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Setup fee</span>
+              <span className="font-medium">${client.setupFeeUsd.toLocaleString()}</span>
+            </div>
             {client.plan === "RETAINER" ? (
-              <p>Monthly retainer: <span className="text-foreground font-medium">${client.monthlyFeeUsd.toLocaleString()}/mo</span></p>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Monthly retainer</span>
+                <span className="font-medium">${client.monthlyFeeUsd.toLocaleString()}/mo</span>
+              </div>
             ) : (
-              <p>Per-meeting fee: <span className="text-foreground font-medium">${client.perMeetingFeeUsd.toLocaleString()}/meeting</span></p>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Per qualified meeting</span>
+                <span className="font-medium">${client.perMeetingFeeUsd.toLocaleString()}/meeting</span>
+              </div>
             )}
           </div>
-          {!client.stripeCustomerId ? (
-            <form action={handleSendInvoice}>
-              <button
-                type="submit"
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                Send setup invoice (${client.setupFeeUsd.toLocaleString()})
-              </button>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Creates a Stripe customer + sends a hosted invoice to {client.contactEmail}.
-              </p>
-            </form>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Setup invoice already sent. Use the Stripe dashboard to create the recurring subscription after payment clears.
-              </p>
+
+          {/* Invoice actions */}
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Send invoice</p>
+            <div className="flex flex-wrap gap-2">
               <form action={handleSendInvoice}>
-                <button
-                  type="submit"
-                  className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
-                >
-                  Resend setup invoice
+                <button type="submit" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                  Setup fee ${client.setupFeeUsd.toLocaleString()}
                 </button>
               </form>
+              {client.plan === "RETAINER" && (
+                <form action={handleSendRetainerInvoice}>
+                  <button type="submit" className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
+                    Monthly retainer ${client.monthlyFeeUsd.toLocaleString()}
+                  </button>
+                </form>
+              )}
+              {client.plan === "PAY_PER_MEETING" && (
+                <a
+                  href={`/growth/clients/${id}/meeting-invoice`}
+                  className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted inline-flex items-center"
+                >
+                  Meeting invoice
+                </a>
+              )}
             </div>
-          )}
+            <p className="text-xs text-muted-foreground">
+              Invoices are sent to <strong>{client.contactEmail}</strong> via Stripe with a 7-day payment window.
+            </p>
+          </div>
+
+          {/* Payment links to copy */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payment links (copy to send)</p>
+            <div className="space-y-1.5 text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-28 shrink-0">Setup $1,500</span>
+                <a href={process.env.STRIPE_LINK_SETUP_FEE ?? "#"} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
+                  {process.env.STRIPE_LINK_SETUP_FEE ?? "not configured"}
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-28 shrink-0">Retainer $500/mo</span>
+                <a href={process.env.STRIPE_LINK_RETAINER_500 ?? "#"} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
+                  {process.env.STRIPE_LINK_RETAINER_500 ?? "not configured"}
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-28 shrink-0">Retainer $1k/mo</span>
+                <a href={process.env.STRIPE_LINK_RETAINER_1000 ?? "#"} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
+                  {process.env.STRIPE_LINK_RETAINER_1000 ?? "not configured"}
+                </a>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
