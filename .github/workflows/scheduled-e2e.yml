@@ -12,6 +12,7 @@ permissions:
 jobs:
   e2e-prod:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +28,7 @@ jobs:
         working-directory: apps/web
 
       - name: Install Playwright browsers
+        timeout-minutes: 5
         run: pnpm exec playwright install chromium --with-deps
         working-directory: apps/web
 
@@ -37,12 +39,14 @@ jobs:
           [ "$STATUS" = "200" ] || (echo "Auth broken: /api/auth/providers returned $STATUS, expected 200" && exit 1)
 
       - name: Run Playwright E2E suite against prod
+        timeout-minutes: 5
         env:
           E2E_BASE_URL: https://growth.korrali.com
           E2E_SESSION_TOKEN: ${{ secrets.E2E_SESSION_TOKEN }}
         run: |
           pnpm exec playwright test \
             --project=chromium \
+            --timeout=30000 \
             --reporter=list
         working-directory: apps/web
 
