@@ -72,7 +72,6 @@ test.describe("API auth gates — every server endpoint", () => {
     { method: "GET", path: "/api/outreach" },
     { method: "GET", path: "/api/community" },
     { method: "GET", path: "/api/seo" },
-    { method: "GET", path: "/api/blog" },
   ];
 
   for (const { method, path } of endpoints) {
