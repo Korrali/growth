@@ -105,8 +105,9 @@ enum CampaignProduct {
 }
 
 enum ClientPlan {
-  RETAINER       // setup fee + monthly flat
+  RETAINER        // setup fee + monthly flat (DFY managed service)
   PAY_PER_MEETING // setup fee + per-qualified-meeting
+  SELF_SERVE      // $300/mo recurring, self-signed up via Stripe checkout
 }
 
 enum ClientStatus {
