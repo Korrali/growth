@@ -5,6 +5,10 @@ on:
     - cron: "15 6 * * *"  # 01:15 AM Chicago (CDT/UTC-5)
   workflow_dispatch:
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   e2e-prod:
     runs-on: ubuntu-latest
@@ -13,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install pnpm
         run: npm install -g pnpm
