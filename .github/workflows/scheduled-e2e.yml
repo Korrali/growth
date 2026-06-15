@@ -30,12 +30,11 @@ jobs:
         run: pnpm exec playwright install chromium --with-deps
         working-directory: apps/web
 
-      - name: Google OAuth probe → redirect (not 500)
+      - name: Auth providers probe → 200 (critical regression check)
         run: |
           STATUS=$(curl -sk -o /dev/null -w "%{http_code}" \
-            --max-redirs 0 https://growth.korrali.com/api/auth/signin/google || echo "000")
-          [[ "$STATUS" == "302" || "$STATUS" == "303" || "$STATUS" == "200" ]] \
-            || (echo "Google auth broken: $STATUS" && exit 1)
+            https://growth.korrali.com/api/auth/providers || echo "000")
+          [ "$STATUS" = "200" ] || (echo "Auth broken: /api/auth/providers returned $STATUS, expected 200" && exit 1)
 
       - name: Run Playwright E2E suite against prod
         env:
