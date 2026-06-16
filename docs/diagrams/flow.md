@@ -1,3 +1,4 @@
+---
 # Korrali Growth — End-to-End Flow
 
 Internal founder tool for outbound, trials, and content ops across Korrali Trust + Revenue. **Not customer-facing, no billing.** Diagrams use Mermaid.
@@ -28,4 +29,6 @@ Internal founder tool for outbound, trials, and content ops across Korrali Trust
 
 ---
 
-**One-line summary:** AI discovers and fit-scores companies, finds contacts, writes and sends personalized outreach, classifies replies, nudges at-risk trials, and generates content — all as pg-boss queues driven by cron schedules and webhooks, for the founder's eyes only.
+**One-line summary:** AI discovers and fit-scores companies (threshold ≥6), finds contacts, writes and sends personalized outreach, classifies replies, nudges at-risk trials, and generates + auto-publishes SEO content — all as pg-boss queues driven by 9 cron schedules and webhooks, for the founder's eyes only.
+
+---

@@ -174,14 +174,17 @@ export async function sendOutreachStep(
     ?? "outreach@korrali.com";
   const inboundDomain = outreach.campaign.client?.inboundDomain
     ?? process.env.RESEND_INBOUND_DOMAIN
-    ?? "reply.outreach.korrali.com";
+    ?? null;
+  const replyTo = inboundDomain
+    ? `reply+${outreachId}@${inboundDomain}`
+    : fromEmail;
 
   const payload = {
     from: `${fromName} <${fromEmail}>`,
     to: [contact.email],
     subject: draft.subject,
     text: bodyWithFooter,
-    reply_to: `reply+${outreachId}@${inboundDomain}`,
+    reply_to: replyTo,
   };
 
   const res = await fetch("https://api.resend.com/emails", {

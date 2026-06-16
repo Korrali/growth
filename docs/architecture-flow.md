@@ -16,7 +16,7 @@ flowchart TD
     CSV --> CO
     VIS --> CO
     CO --> FS["AI fit score<br/>(TRUST / REVENUE / BOTH / REJECT)"]
-    FS -->|"score >= 7"| CF["Find contacts"]
+    FS -->|"score >= 6"| CF["Find contacts"]
     CF --> CT["Contacts"]
     CT --> CAMP["Campaign -> Outreach sequence"]
     CAMP --> EG["AI email generation<br/>(personalized per step)"]
@@ -37,9 +37,11 @@ flowchart LR
         K2["trial-daily-check (7am)"]
         K3["company-discover (Mon-Fri 5am)"]
         K4["community-scan (8am)"]
+        K5["seo-topic-refresh (Mon 10am)"]
         K6["linkedin-draft (9am)"]
         K7["content-distribute (30m)"]
         K8["weekly-insights (Mon 6am)"]
+        K9["seo-auto-publish (Tue+Thu 11am)"]
     end
     subgraph Events["Event triggers"]
         E1["/api/email/inbound"]
@@ -62,16 +64,21 @@ flowchart LR
         H12["call.brief / call.followup -> Claude"]
         H13["visitor.process -> Claude"]
         H14["weekly.insights -> Claude"]
+        H15["seo-topic-analyzer -> Claude"]
+        H16["seo-article-generator -> Claude"]
     end
     K1 --> H1
     K2 --> H8
     K3 --> H2
     H2 --> H3
-    H3 -->|"fit >= 7"| H4
+    H3 -->|"fit >= 6"| H4
     K4 --> H9
+    K5 --> H15
     K6 --> H10
     K7 --> H11
     K8 --> H14
+    K9 --> H15
+    K9 --> H16
     E1 --> H6
     H6 -->|"INTERESTED"| H7
     E2 --> H13
@@ -121,12 +128,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    COMM["Community mentions<br/>(Reddit / HN / IH)"] --> TOP["seo-topic-analyzer<br/>(weekly cache)"]
+    COMM["Community mentions<br/>(Reddit / HN / IH)"] --> TOP["seo-topic-analyzer<br/>(Mon 10am cache refresh)"]
     PERF["Campaign performance<br/>(best segments / subject lines)"] --> INS["weekly-insights (Claude)"]
-    TOP --> GEN["content.generate (Claude)<br/>SEO articles + LinkedIn posts"]
-    INS --> GEN
-    GEN --> SCHED["ContentDraft (scheduled)"]
-    SCHED --> DIST["content.distribute<br/>(cron every 30m)"]
+    TOP --> GEN["seo-article-generator (Claude)<br/>SEO articles — Tue + Thu 11am autopublish"]
+    INS --> GEN2["content.generate (Claude)<br/>LinkedIn posts + other content types"]
+    GEN --> SCHED["ContentDraft (posted, served by /api/blog)"]
+    GEN2 --> SCHED2["ContentDraft (scheduled)"]
+    SCHED2 --> DIST["content.distribute<br/>(cron every 30m)"]
 ```
 
 ## Infrastructure
@@ -135,7 +143,7 @@ flowchart LR
 flowchart LR
     subgraph EC2["EC2 (nginx)"]
         WEB["Next.js web<br/>(single-tenant, founder only)"]
-        WK["Worker (pm2)<br/>16 queues + 8 cron jobs"]
+        WK["Worker (pm2)<br/>16 queues + 9 cron jobs"]
         PG[("Postgres")]
         QB["pg-boss (queues + schedules)"]
     end
@@ -152,4 +160,4 @@ flowchart LR
 
 ---
 
-**One-line summary:** AI discovers and fit-scores companies, finds contacts, writes and sends personalized outreach, classifies replies, nudges at-risk trials, and generates content — all as pg-boss queues driven by cron schedules and webhooks, for the founder's eyes only.
+**One-line summary:** AI discovers and fit-scores companies (threshold ≥6), finds contacts, writes and sends personalized outreach, classifies replies, nudges at-risk trials, and generates + auto-publishes SEO content — all as pg-boss queues driven by 9 cron schedules and webhooks, for the founder's eyes only.
