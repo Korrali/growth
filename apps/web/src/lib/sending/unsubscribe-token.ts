@@ -1,8 +1,10 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
 function getSecret(): string {
-  const secret = process.env.NEXTAUTH_SECRET;
-  if (!secret) throw new Error("NEXTAUTH_SECRET must be set for unsubscribe token generation");
+  // Use a dedicated secret so rotating NEXTAUTH_SECRET doesn't invalidate
+  // previously sent unsubscribe links (which would be a CAN-SPAM violation).
+  const secret = process.env.UNSUBSCRIBE_HMAC_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error("UNSUBSCRIBE_HMAC_SECRET must be set for unsubscribe token generation");
   return secret;
 }
 
