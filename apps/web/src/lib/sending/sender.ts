@@ -11,10 +11,29 @@ import { verifyEmail } from "@/lib/import/email-verifier";
 const TERMINAL_ELIGIBILITY_REASONS = new Set([
   "contact_suppressed",
   "email_invalid",
+  "email_disposable",
   "email_in_suppression_list",
   "domain_suppressed",
   "outreach_not_found",
 ]);
+
+// Transient failures: retry in 1 hour so the cron picks them up again.
+// Without this, outreaches first-attempted outside the send window stay stuck
+// with nextSendAt=NULL and never surface in the due-check query.
+const RETRY_IN_ONE_HOUR_REASONS = new Set([
+  "outside_send_window",
+  "quiet_hours",
+  "daily_limit_reached",
+  "per_domain_limit_reached",
+]);
+
+async function rescheduleIn(outreachId: string, hours: number): Promise<void> {
+  const retryAt = new Date(Date.now() + hours * 60 * 60 * 1000);
+  await prisma.outreach.update({
+    where: { id: outreachId },
+    data: { nextSendAt: retryAt },
+  }).catch(() => {});
+}
 
 export interface SendResult {
   sent: boolean;
@@ -30,9 +49,13 @@ export async function sendOutreachStep(
   const eligibility = await checkSendEligibility(outreachId, stepNumber);
   if (!eligibility.eligible) {
     const reason = eligibility.reason ?? "unknown";
-    if (TERMINAL_ELIGIBILITY_REASONS.has(reason.split(":")[0])) {
+    const baseReason = reason.split(":")[0];
+    if (TERMINAL_ELIGIBILITY_REASONS.has(baseReason)) {
       // Terminal: move outreach to STOPPED so the cron never re-queues it.
       await stopOutreachSequence(outreachId, reason).catch(() => {});
+    } else if (RETRY_IN_ONE_HOUR_REASONS.has(baseReason)) {
+      // Transient: set nextSendAt so the cron rescues the outreach.
+      await rescheduleIn(outreachId, 1);
     }
     await prisma.auditLog.create({
       data: {
@@ -108,6 +131,20 @@ export async function sendOutreachStep(
   //   • deliverable / risky (catch-all) → send
   if (stepNumber === 1) {
     const verdict = await verifyEmail(contact.email);
+
+    // Persist verification result so Gate 3 and future steps reflect reality.
+    const statusMap = {
+      deliverable: "VALID",
+      risky: "CATCH_ALL",
+      undeliverable: "INVALID",
+    } as const;
+    if (verdict in statusMap) {
+      await prisma.contact.update({
+        where: { id: contact.id },
+        data: { emailStatus: statusMap[verdict as keyof typeof statusMap] },
+      }).catch(() => {});
+    }
+
     if (verdict === "undeliverable") {
       await prisma.contact.update({
         where: { id: contact.id },
@@ -130,6 +167,8 @@ export async function sendOutreachStep(
       verdict === "risky" ||
       process.env.GROWTH_ALLOW_UNVERIFIED_SEND === "true";
     if (!sendable) {
+      // "unknown" — provider unavailable or timed out. Reschedule; do not suppress.
+      await rescheduleIn(outreachId, 4);
       await prisma.auditLog.create({
         data: {
           actor: "system",

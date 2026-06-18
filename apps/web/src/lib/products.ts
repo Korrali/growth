@@ -67,7 +67,10 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
       "Subscription billing health monitoring — detects failed payments, revenue leakage, duplicate charges, and billing anomalies for Stripe-based SaaS.",
     icp: `Good fit (score 6–10): Any subscription SaaS generating revenue. Stronger signals: subscription or usage-based pricing model, engineering team is small relative to customer base (billing is deprioritised), scaling MRR (any stage from post-revenue seed to series B), Stripe mentioned in tech stack or job postings, no dedicated billing ops or RevOps hire, has multiple pricing tiers or seats-based billing.
 
-Weak fit / REJECT: non-subscription businesses (one-time purchase, services, agencies), companies with dedicated billing engineering teams, enterprise companies with custom invoicing only.`,
+ALWAYS REJECT — these are competitors or non-buyers for Revenue:
+- Any company whose core product IS subscription analytics, revenue intelligence, failed payment recovery, dunning management, billing health monitoring, MRR/churn reporting, or subscription billing infrastructure. Named examples: Baremetrics, ChartMogul, ProfitWell, Maxio (formerly ProfitWell), Paddle (billing platform), Recurly, Chargebee, Stunning, Gravy, Churnbuster, Payfunnels, Stripe Radar, MoonClerk. Apply this rule to ANY company fitting that description, not just named ones.
+- Signals that a company IS a competitor: their product helps OTHER SaaS companies track MRR, recover failed payments, reduce churn, manage subscriptions, or monitor billing health. If their customers are SaaS founders using their tool to understand their own revenue — they are a competitor.
+- Non-subscription businesses (one-time purchase, services, agencies), companies with dedicated billing engineering teams, enterprise companies with custom invoicing only.`,
     buyers:
       "Founders, CTOs, RevOps at subscription SaaS companies running on Stripe.",
     personas: [

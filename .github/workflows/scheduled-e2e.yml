@@ -2,7 +2,7 @@ name: Scheduled E2E — Growth Prod
 
 on:
   schedule:
-    - cron: "15 6 * * *"  # 01:15 AM Chicago (CDT/UTC-5)
+    - cron: "15 6 * * 1"  # Monday 01:15 AM Chicago (CDT/UTC-5)
   workflow_dispatch:
 
 permissions:

@@ -73,9 +73,12 @@ export async function checkSendEligibility(
 
   const contact = outreach.contact;
 
-  // Gate 3: Contact not suppressed + emailStatus ≠ INVALID
+  // Gate 3: Contact not suppressed + emailStatus ≠ INVALID or DISPOSABLE.
+  // UNVERIFIED is allowed here — sender.ts verifies at send time for step 1
+  // and updates emailStatus, so subsequent steps see the real result.
   if (contact.suppressedAt) return ineligible("contact_suppressed");
   if (contact.emailStatus === EmailStatus.INVALID) return ineligible("email_invalid");
+  if (contact.emailStatus === EmailStatus.DISPOSABLE) return ineligible("email_disposable");
 
   // Gate 4: Suppression table checks
   if (await isEmailSuppressed(contact.email)) return ineligible("email_in_suppression_list");

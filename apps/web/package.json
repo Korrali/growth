@@ -23,6 +23,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
     "@auth/prisma-adapter": "^2.11.2",
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.19.3",
     "@sentry/nextjs": "^10.53.1",
     "class-variance-authority": "^0.7.1",
@@ -30,6 +31,7 @@
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "next-auth": "5.0.0-beta.31",
+    "openai": "^6.44.0",
     "papaparse": "^5.4.1",
     "pg-boss": "^12.18.2",
     "react": "19.2.4",
