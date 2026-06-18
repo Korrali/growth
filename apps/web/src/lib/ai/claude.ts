@@ -2,12 +2,11 @@ import OpenAI from "openai";
 
 // Groq: OpenAI-compatible, free tier 14,400 req/day.
 // TPM: 6,000 for 70B (cheap model), 131,072 for 8B — well within cash-sprint volume.
-const groq = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY ?? "",
-  baseURL: "https://api.groq.com/openai/v1",
-  maxRetries: 3,
-  timeout: 45_000,
-});
+let _groq: OpenAI | null = null;
+function getGroq() {
+  if (!_groq) _groq = new OpenAI({ apiKey: process.env.GROQ_API_KEY ?? "", baseURL: "https://api.groq.com/openai/v1", maxRetries: 3, timeout: 45_000 });
+  return _groq;
+}
 
 export const CLAUDE_MODELS = {
   default: "llama-3.3-70b-versatile",
@@ -61,7 +60,7 @@ export const anthropic = {
 
       const needsJson = !!(params.output_config as { format?: unknown } | undefined)?.format;
 
-      const completion = await groq.chat.completions.create({
+      const completion = await getGroq().chat.completions.create({
         model: toGroqModel((params.model as string) ?? CLAUDE_MODELS.default),
         max_tokens: (params.max_tokens as number) ?? 1024,
         messages: msgs,
