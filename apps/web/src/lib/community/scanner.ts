@@ -3,9 +3,11 @@ import { scoreCommunityMention } from "@/lib/ai/community-intent-scorer";
 import { CommunitySource } from "@prisma/client";
 
 // ─── Scan targets ────────────────────────────────────────────────────────────
-// Reddit: Tavily site: queries (1×/day keeps Tavily within free 1k/month budget)
+// Reddit: Tavily site: queries (10 targets, 3×/week)
 // HN:     Algolia API — free, no key, no rate limit
-// IH:     Tavily site: queries (4 targets × 1×/day = 120 calls/month)
+// IH:     Tavily site: queries (4 targets, 3×/week)
+// Tavily: 14 targets × 3 runs/week ≈ 180 calls/month, shared with on-demand
+//         company discovery + contact import (free tier = 1,000/month).
 
 interface ScanTarget {
   source: CommunitySource;
@@ -187,6 +189,10 @@ async function runTavilyScan(): Promise<void> {
     return;
   }
 
+  // Collect queries that *just* crossed the failure threshold this run, so we
+  // send a single consolidated alert instead of one email per failing query.
+  const newlyBroken: { source: CommunitySource; keyword: string; error: string }[] = [];
+
   for (const target of SCAN_TARGETS) {
     const { source, subreddit, keyword } = target;
     const startedAt = Date.now();
@@ -222,20 +228,10 @@ async function runTavilyScan(): Promise<void> {
         update: { consecutiveErrors: { increment: 1 }, lastScannedAt: new Date() },
       });
 
-      if (updated.consecutiveErrors >= 3) {
-        const resendKey = process.env.RESEND_API_KEY;
-        if (resendKey) {
-          await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              from: "growth@korrali.com",
-              to: "bhagat.ashish.a@gmail.com",
-              subject: `[Community Scout] 3 consecutive failures: ${source}`,
-              text: `Community scanner failed 3 times.\n\nSource: ${source}\nKeyword: ${keyword}\nError: ${errorMsg}`,
-            }),
-          }).catch(() => {});
-        }
+      // Alert only on the exact run a query crosses the threshold — never again
+      // while it stays broken — so a quota outage can't spam one email per day.
+      if (updated.consecutiveErrors === 3) {
+        newlyBroken.push({ source, keyword, error: errorMsg });
       }
     }
 
@@ -244,6 +240,27 @@ async function runTavilyScan(): Promise<void> {
     });
 
     console.log(`[community-scanner] ${source} found=${postsFound} new=${newPosts}${errorMsg ? ` err=${errorMsg}` : ""}`);
+  }
+
+  // One email per run, listing every query that just broke. A shared-quota
+  // outage hits many queries at once but now produces a single alert.
+  if (newlyBroken.length > 0) {
+    const resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      const lines = newlyBroken
+        .map((b) => `• [${b.source}] ${b.keyword}\n  ${b.error}`)
+        .join("\n\n");
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "growth@korrali.com",
+          to: "bhagat.ashish.a@gmail.com",
+          subject: `[Community Scout] ${newlyBroken.length} quer${newlyBroken.length === 1 ? "y" : "ies"} hit 3 consecutive failures`,
+          text: `These queries just failed 3 times in a row (you will not be alerted again until they recover and re-break):\n\n${lines}`,
+        }),
+      }).catch(() => {});
+    }
   }
 }
 
