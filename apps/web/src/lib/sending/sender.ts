@@ -8,6 +8,9 @@ import { PRODUCTS } from "@/lib/products";
 import { verifyEmail } from "@/lib/import/email-verifier";
 
 // Reasons that mean the outreach should be permanently stopped (never re-queued).
+// These are conditions that won't resolve by waiting — a low quality score,
+// an exhausted follow-up budget, or a failed content gate need a human (or a
+// regeneration job) to act, not a retry loop.
 const TERMINAL_ELIGIBILITY_REASONS = new Set([
   "contact_suppressed",
   "email_invalid",
@@ -15,6 +18,9 @@ const TERMINAL_ELIGIBILITY_REASONS = new Set([
   "email_in_suppression_list",
   "domain_suppressed",
   "outreach_not_found",
+  "max_followups_exceeded",
+  "fit_score_too_low",
+  "quality_gate_blocked",
 ]);
 
 // Transient failures: retry in 1 hour so the cron picks them up again.
@@ -25,6 +31,10 @@ const RETRY_IN_ONE_HOUR_REASONS = new Set([
   "quiet_hours",
   "daily_limit_reached",
   "per_domain_limit_reached",
+  "global_emergency_stop",
+  "campaign_not_active",
+  "outreach_not_active",
+  "already_sent_this_step",
 ]);
 
 async function rescheduleIn(outreachId: string, hours: number): Promise<void> {
@@ -55,6 +65,13 @@ export async function sendOutreachStep(
       await stopOutreachSequence(outreachId, reason).catch(() => {});
     } else if (RETRY_IN_ONE_HOUR_REASONS.has(baseReason)) {
       // Transient: set nextSendAt so the cron rescues the outreach.
+      await rescheduleIn(outreachId, 1);
+    } else {
+      // Uncategorized reason — never leave nextSendAt untouched here. Without
+      // this, an eligibility check added later (or any reason we haven't
+      // explicitly bucketed) silently re-triggers every cron cycle forever
+      // with zero forward progress, since nothing else advances nextSendAt.
+      // A conservative 1-hour retry surfaces it again without spinning.
       await rescheduleIn(outreachId, 1);
     }
     await prisma.auditLog.create({
