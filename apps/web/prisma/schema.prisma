@@ -273,6 +273,7 @@ model Company {
   recommendedCta          String?
   fitReasoning            String?
   fitScoredAt             DateTime?
+  landingPageAnalysis     Json?
   acquisitionSource       String?
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
@@ -394,6 +395,8 @@ model OutreachEmailDraft {
   personalizationScore Int?
   riskScore           Int?
   qualityGates        Json?
+  criticsPassed       Boolean?
+  criticsFlags        String[]
   approvedAt          DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
 import { WRITING_MODEL } from "@/lib/ai/models";
 import { PRODUCTS } from "@/lib/products";
+import { reviewWithCritics } from "@/lib/ai/critics-reviewer";
 import type { CampaignProduct } from "@prisma/client";
 
 export interface GeneratedStep {
@@ -44,27 +45,37 @@ Rules:
 - Direct, specific, and human. One genuine observation per email. No bullet lists.
 - Each step builds on the previous one narratively — they should feel like a cohesive sequence.
 - Subject lines: lowercase, punchy, 4-7 words max. No clickbait.
+- Step 1 only: if landingPageAnalysis.positioningSuggestion is provided in the input, use it as the email's opening hook — reference it as if you just visited their site and noticed something specific. This makes the email feel genuinely researched, not templated.
 
 For each step provide relevanceScore (1-10), personalizationScore (1-10), riskScore (1-10 where 1=safe, 10=risky/spammy).
 
-Respond with valid JSON only: an array of 4 objects.`;
+Respond with valid JSON only: an object with a "steps" array of 4 objects.`;
 }
 
+// Root must be an object — structured outputs mishandles top-level array
+// schemas (same bug that broke company discovery: "extracted is not iterable").
 const OUTPUT_SCHEMA = {
-  type: "array" as const,
-  items: {
-    type: "object" as const,
-    properties: {
-      stepNumber: { type: "number" },
-      subject: { type: "string" },
-      body: { type: "string" },
-      relevanceScore: { type: "number" },
-      personalizationScore: { type: "number" },
-      riskScore: { type: "number" },
+  type: "object" as const,
+  properties: {
+    steps: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          stepNumber: { type: "number" },
+          subject: { type: "string" },
+          body: { type: "string" },
+          relevanceScore: { type: "number" },
+          personalizationScore: { type: "number" },
+          riskScore: { type: "number" },
+        },
+        required: ["stepNumber", "subject", "body", "relevanceScore", "personalizationScore", "riskScore"],
+        additionalProperties: false,
+      },
     },
-    required: ["stepNumber", "subject", "body", "relevanceScore", "personalizationScore", "riskScore"],
-    additionalProperties: false,
   },
+  required: ["steps"],
+  additionalProperties: false,
 };
 
 export async function generateEmailSequence(input: {
@@ -102,6 +113,7 @@ export async function generateEmailSequence(input: {
       trigger: outreach.company?.trigger,
       personalizedObservation: outreach.company?.personalizedObservation,
       fitScore,
+      landingPageAnalysis: outreach.company?.landingPageAnalysis ?? null,
     },
     campaign: {
       name: campaign.name,
@@ -137,13 +149,25 @@ export async function generateEmailSequence(input: {
     const block = response.content.find((b) => b.type === "text");
     if (!block || block.type !== "text") throw new Error("No text block");
 
-    const parsed = JSON.parse(block.text) as GeneratedStep[];
+    const rawParsed = JSON.parse(block.text) as
+      | GeneratedStep[]
+      | { steps?: GeneratedStep[] };
+    const parsed = Array.isArray(rawParsed) ? rawParsed : (rawParsed.steps ?? []);
+    if (parsed.length === 0) throw new Error("Empty step array from model");
     outputData = parsed;
 
-    // Run quality gates and write drafts
+    // Run quality gates (including critics review) and write drafts
     const gatesMap: Record<number, QualityGateResult> = {};
     for (const step of parsed) {
       const gates = checkQualityGates(step, fitScore);
+
+      // Adversarial critics review — run on every step, cheap 8B model, best-effort
+      const critics = await reviewWithCritics({ subject: step.subject, body: step.body });
+      if (!critics.passed) {
+        critics.flags.forEach((f) => gates.blockedReasons.push(f));
+        gates.passed = false;
+      }
+
       gatesMap[step.stepNumber] = gates;
 
       await prisma.outreachEmailDraft.upsert({
@@ -157,6 +181,8 @@ export async function generateEmailSequence(input: {
           personalizationScore: step.personalizationScore,
           riskScore: step.riskScore,
           qualityGates: JSON.parse(JSON.stringify(gates)),
+          criticsPassed: critics.passed,
+          criticsFlags: critics.flags,
         },
         update: {
           subject: step.subject,
@@ -165,6 +191,8 @@ export async function generateEmailSequence(input: {
           personalizationScore: step.personalizationScore,
           riskScore: step.riskScore,
           qualityGates: JSON.parse(JSON.stringify(gates)),
+          criticsPassed: critics.passed,
+          criticsFlags: critics.flags,
           approvedAt: null,
         },
       });

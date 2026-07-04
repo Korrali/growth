@@ -3,40 +3,47 @@ import { scoreCommunityMention } from "@/lib/ai/community-intent-scorer";
 import { CommunitySource } from "@prisma/client";
 
 // ─── Scan targets ────────────────────────────────────────────────────────────
-// Reddit: Tavily site: queries (10 targets, 3×/week)
-// HN:     Algolia API — free, no key, no rate limit
-// IH:     Tavily site: queries (4 targets, 3×/week)
-// Tavily: 14 targets × 3 runs/week ≈ 180 calls/month, shared with on-demand
-//         company discovery + contact import (free tier = 1,000/month).
+// Reddit: native Reddit JSON API — free, no key, 10 req/min unauthenticated.
+// HN:     Algolia API — free, no key, no rate limit.
+// IH:     Tavily site: queries — only 4 targets × 3 runs/week ≈ 48 calls/month,
+//         keeping Tavily well within the free 1,000/month shared with company
+//         discovery and contact-finder.
 
-interface ScanTarget {
-  source: CommunitySource;
-  subreddit?: string;
-  keyword: string;
+interface RedditTarget {
+  subreddit: string;
+  keyword: string; // search terms sent to Reddit's own search API
 }
 
-const SCAN_TARGETS: ScanTarget[] = [
-  // ── Reddit — Trust ICP ────────────────────────────────────────────────────
-  { source: "REDDIT", subreddit: "SaaS",     keyword: `site:reddit.com/r/SaaS "security questionnaire"` },
-  { source: "REDDIT", subreddit: "SaaS",     keyword: `site:reddit.com/r/SaaS "SOC 2" startup` },
-  { source: "REDDIT", subreddit: "startups", keyword: `site:reddit.com/r/startups "compliance" enterprise B2B` },
-  { source: "REDDIT", subreddit: "startups", keyword: `site:reddit.com/r/startups "security review" SaaS` },
-  // ── Reddit — Revenue ICP ──────────────────────────────────────────────────
-  { source: "REDDIT", subreddit: "stripe",   keyword: `site:reddit.com/r/stripe "failed payments" SaaS` },
-  { source: "REDDIT", subreddit: "SaaS",     keyword: `site:reddit.com/r/SaaS "Stripe" billing subscription problem` },
-  { source: "REDDIT", subreddit: "startups", keyword: `site:reddit.com/r/startups "failed payments" subscription startup` },
-  { source: "REDDIT", subreddit: "EntrepreneurRideAlong", keyword: `site:reddit.com/r/EntrepreneurRideAlong "billing" Stripe subscription` },
-  { source: "REDDIT", subreddit: "SaaS",     keyword: `site:reddit.com/r/SaaS "vendor review" enterprise` },
-  { source: "REDDIT", subreddit: "stripe",   keyword: `site:reddit.com/r/stripe "billing issue" subscription` },
-  // ── Indie Hackers — Trust ICP ─────────────────────────────────────────────
+// Subreddit-scoped searches using Reddit's native /r/{sub}/search.json endpoint.
+const REDDIT_TARGETS: RedditTarget[] = [
+  // Trust ICP
+  { subreddit: "SaaS",                    keyword: '"security questionnaire"' },
+  { subreddit: "SaaS",                    keyword: '"SOC 2" startup' },
+  { subreddit: "startups",               keyword: '"compliance" enterprise B2B' },
+  { subreddit: "startups",               keyword: '"security review" SaaS' },
+  // Revenue ICP
+  { subreddit: "stripe",                 keyword: '"failed payments" SaaS' },
+  { subreddit: "SaaS",                   keyword: '"Stripe" billing subscription problem' },
+  { subreddit: "startups",               keyword: '"failed payments" subscription startup' },
+  { subreddit: "EntrepreneurRideAlong",  keyword: '"billing" Stripe subscription' },
+  { subreddit: "SaaS",                   keyword: '"vendor review" enterprise' },
+  { subreddit: "stripe",                 keyword: '"billing issue" subscription' },
+];
+
+interface TavilyTarget {
+  source: CommunitySource;
+  keyword: string; // Tavily site: query
+}
+
+// IH only — 4 targets keeps Tavily quota free for company discovery / contact import.
+const TAVILY_TARGETS: TavilyTarget[] = [
   { source: "INDIE_HACKERS", keyword: `site:indiehackers.com "compliance" SaaS enterprise` },
   { source: "INDIE_HACKERS", keyword: `site:indiehackers.com "security questionnaire" OR "SOC 2" startup` },
-  // ── Indie Hackers — Revenue ICP ───────────────────────────────────────────
   { source: "INDIE_HACKERS", keyword: `site:indiehackers.com "failed payments" OR "billing" subscription Stripe` },
   { source: "INDIE_HACKERS", keyword: `site:indiehackers.com "churn" OR "dunning" SaaS Stripe` },
 ];
 
-// HN Algolia queries — free API, not in SCAN_TARGETS
+// HN Algolia queries — free API, no key needed
 const HN_QUERIES = [
   "AI compliance SOC2 startup",
   "security questionnaire vendor review SaaS",
@@ -46,7 +53,43 @@ const HN_QUERIES = [
   "stripe billing subscription dunning",
 ];
 
-// ─── Tavily helper ────────────────────────────────────────────────────────────
+// ─── Reddit native API ────────────────────────────────────────────────────────
+// Free, no key required. Rate limit: 10 req/min unauthenticated — well within
+// our 3×/week schedule (10 subreddit searches per run).
+
+interface RedditPost {
+  id: string;
+  title: string;
+  selftext: string;
+  url: string;
+  permalink: string;
+  author: string;
+}
+
+async function redditSearch(subreddit: string, query: string): Promise<RedditPost[]> {
+  const url =
+    `https://www.reddit.com/r/${subreddit}/search.json` +
+    `?q=${encodeURIComponent(query)}&restrict_sr=on&sort=new&t=month&limit=10`;
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": "korrali-growth-scanner/1.0" },
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Reddit API error ${res.status}: ${body}`);
+  }
+
+  const data = (await res.json()) as {
+    data?: { children?: Array<{ data?: RedditPost }> };
+  };
+
+  return (data.data?.children ?? [])
+    .map((c) => c.data)
+    .filter((p): p is RedditPost => Boolean(p?.id));
+}
+
+// ─── Tavily helper (IH only) ──────────────────────────────────────────────────
 
 interface TavilyResult {
   title: string;
@@ -87,18 +130,6 @@ async function tavilySearch(query: string): Promise<TavilyResult[]> {
   }));
 }
 
-// ─── Reddit helpers ───────────────────────────────────────────────────────────
-
-function extractRedditPostId(url: string): string | null {
-  const match = url.match(/reddit\.com\/r\/[^/]+\/comments\/([a-z0-9]+)/i);
-  return match ? match[1] : null;
-}
-
-function extractAuthor(content: string): string {
-  const match = content.match(/u\/([A-Za-z0-9_-]+)/);
-  return match ? match[1] : "unknown";
-}
-
 // ─── HN Algolia scanner ───────────────────────────────────────────────────────
 
 interface HnHit {
@@ -125,25 +156,13 @@ async function scanHackerNews(query: string): Promise<HnHit[]> {
   return data.hits ?? [];
 }
 
-// ─── Process a single Tavily result into CommunityMention ────────────────────
+// ─── Process a single Tavily (IH) result into CommunityMention ───────────────
 
 async function processTavilyResult(
   result: TavilyResult,
   source: CommunitySource,
-  subreddit: string | undefined,
-  keyword: string,
-): Promise<"new" | "exists" | "skip"> {
-  let externalId: string;
-  let url = result.url;
-
-  if (source === "REDDIT") {
-    const id = extractRedditPostId(url);
-    if (!id) return "skip";
-    externalId = id;
-  } else {
-    // For IH: use URL as stable ID (slugified)
-    externalId = url.replace(/[^a-z0-9]/gi, "_").slice(0, 120);
-  }
+): Promise<"new" | "exists"> {
+  const externalId = result.url.replace(/[^a-z0-9]/gi, "_").slice(0, 120);
 
   const exists = await prisma.communityMention.findUnique({
     where: { source_externalId: { source, externalId } },
@@ -151,19 +170,17 @@ async function processTavilyResult(
   });
   if (exists) return "exists";
 
-  const author = source === "REDDIT" ? extractAuthor(result.content) : "unknown";
-
   let mention;
   try {
     mention = await prisma.communityMention.create({
       data: {
         source,
         externalId,
-        subreddit: subreddit ?? null,
+        subreddit: null,
         title: result.title,
         body: result.content,
-        url,
-        author,
+        url: result.url,
+        author: "unknown",
         createdUtc: 0,
         status: "unscored",
       },
@@ -181,7 +198,109 @@ async function processTavilyResult(
   return "new";
 }
 
-// ─── Tavily scan (Reddit + IH) ────────────────────────────────────────────────
+// ─── Reddit native scan (free) ────────────────────────────────────────────────
+
+async function sendAlert(subject: string, body: string): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: "growth@korrali.com",
+      to: "bhagat.ashish.a@gmail.com",
+      subject,
+      text: body,
+    }),
+  }).catch(() => {});
+}
+
+async function runRedditNativeScan(): Promise<void> {
+  const newlyBroken: { subreddit: string; keyword: string; error: string }[] = [];
+
+  for (const { subreddit, keyword } of REDDIT_TARGETS) {
+    const scanKey = `${subreddit}:${keyword}`;
+    const startedAt = Date.now();
+    let postsFound = 0;
+    let newPosts = 0;
+    let errorMsg: string | null = null;
+
+    try {
+      const posts = await redditSearch(subreddit, keyword);
+      postsFound = posts.length;
+
+      for (const post of posts) {
+        const externalId = post.id;
+        const exists = await prisma.communityMention.findUnique({
+          where: { source_externalId: { source: "REDDIT", externalId } },
+          select: { id: true },
+        });
+        if (exists) continue;
+
+        let mention;
+        try {
+          mention = await prisma.communityMention.create({
+            data: {
+              source: "REDDIT",
+              externalId,
+              subreddit,
+              title: post.title,
+              body: post.selftext?.slice(0, 2000) ?? null,
+              url: `https://www.reddit.com${post.permalink}`,
+              author: post.author ?? "unknown",
+              createdUtc: 0,
+              status: "unscored",
+            },
+          });
+        } catch {
+          continue; // duplicate race
+        }
+
+        try {
+          await scoreCommunityMention(mention.id);
+          newPosts++;
+        } catch (err) {
+          console.error(`[community-scanner] Reddit scoring failed for ${externalId}:`, err instanceof Error ? err.message : err);
+        }
+      }
+
+      await prisma.communityScanState.upsert({
+        where: { source_keyword: { source: "REDDIT", keyword: scanKey } },
+        create: { source: "REDDIT", keyword: scanKey, consecutiveErrors: 0 },
+        update: { lastScannedAt: new Date(), consecutiveErrors: 0 },
+      });
+    } catch (err) {
+      errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[community-scanner] Reddit r/${subreddit} "${keyword}":`, errorMsg);
+
+      const updated = await prisma.communityScanState.upsert({
+        where: { source_keyword: { source: "REDDIT", keyword: scanKey } },
+        create: { source: "REDDIT", keyword: scanKey, consecutiveErrors: 1 },
+        update: { consecutiveErrors: { increment: 1 }, lastScannedAt: new Date() },
+      });
+
+      if (updated.consecutiveErrors === 3) {
+        newlyBroken.push({ subreddit, keyword, error: errorMsg });
+      }
+    }
+
+    await prisma.communityScanLog.create({
+      data: { source: "REDDIT", keyword: scanKey, postsFound, newPosts, error: errorMsg, durationMs: Date.now() - startedAt },
+    });
+
+    console.log(`[community-scanner] Reddit r/${subreddit} found=${postsFound} new=${newPosts}${errorMsg ? ` err=${errorMsg}` : ""}`);
+  }
+
+  if (newlyBroken.length > 0) {
+    const lines = newlyBroken.map((b) => `• r/${b.subreddit} "${b.keyword}"\n  ${b.error}`).join("\n\n");
+    await sendAlert(
+      `[Community Scout] ${newlyBroken.length} Reddit target${newlyBroken.length === 1 ? "" : "s"} hit 3 consecutive failures`,
+      `These Reddit queries just failed 3 times in a row (no further alert until they recover and re-break):\n\n${lines}`,
+    );
+  }
+}
+
+// ─── Tavily scan (IH only) ────────────────────────────────────────────────────
 
 async function runTavilyScan(): Promise<void> {
   if (!process.env.TAVILY_API_KEY) {
@@ -189,27 +308,20 @@ async function runTavilyScan(): Promise<void> {
     return;
   }
 
-  // Collect queries that *just* crossed the failure threshold this run, so we
-  // send a single consolidated alert instead of one email per failing query.
   const newlyBroken: { source: CommunitySource; keyword: string; error: string }[] = [];
 
-  for (const target of SCAN_TARGETS) {
-    const { source, subreddit, keyword } = target;
+  for (const { source, keyword } of TAVILY_TARGETS) {
     const startedAt = Date.now();
     let postsFound = 0;
     let newPosts = 0;
     let errorMsg: string | null = null;
 
     try {
-      const results = await tavilySearch(keyword);
-      const validResults = source === "REDDIT"
-        ? results.filter((r) => extractRedditPostId(r.url))
-        : results.filter((r) => r.url.includes("indiehackers.com"));
+      const results = (await tavilySearch(keyword)).filter((r) => r.url.includes("indiehackers.com"));
+      postsFound = results.length;
 
-      postsFound = validResults.length;
-
-      for (const result of validResults) {
-        const outcome = await processTavilyResult(result, source, subreddit, keyword);
+      for (const result of results) {
+        const outcome = await processTavilyResult(result, source);
         if (outcome === "new") newPosts++;
       }
 
@@ -220,7 +332,7 @@ async function runTavilyScan(): Promise<void> {
       });
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[community-scanner] error on "${keyword}":`, errorMsg);
+      console.error(`[community-scanner] Tavily error on "${keyword}":`, errorMsg);
 
       const updated = await prisma.communityScanState.upsert({
         where: { source_keyword: { source, keyword } },
@@ -228,8 +340,6 @@ async function runTavilyScan(): Promise<void> {
         update: { consecutiveErrors: { increment: 1 }, lastScannedAt: new Date() },
       });
 
-      // Alert only on the exact run a query crosses the threshold — never again
-      // while it stays broken — so a quota outage can't spam one email per day.
       if (updated.consecutiveErrors === 3) {
         newlyBroken.push({ source, keyword, error: errorMsg });
       }
@@ -242,25 +352,12 @@ async function runTavilyScan(): Promise<void> {
     console.log(`[community-scanner] ${source} found=${postsFound} new=${newPosts}${errorMsg ? ` err=${errorMsg}` : ""}`);
   }
 
-  // One email per run, listing every query that just broke. A shared-quota
-  // outage hits many queries at once but now produces a single alert.
   if (newlyBroken.length > 0) {
-    const resendKey = process.env.RESEND_API_KEY;
-    if (resendKey) {
-      const lines = newlyBroken
-        .map((b) => `• [${b.source}] ${b.keyword}\n  ${b.error}`)
-        .join("\n\n");
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: "growth@korrali.com",
-          to: "bhagat.ashish.a@gmail.com",
-          subject: `[Community Scout] ${newlyBroken.length} quer${newlyBroken.length === 1 ? "y" : "ies"} hit 3 consecutive failures`,
-          text: `These queries just failed 3 times in a row (you will not be alerted again until they recover and re-break):\n\n${lines}`,
-        }),
-      }).catch(() => {});
-    }
+    const lines = newlyBroken.map((b) => `• [${b.source}] ${b.keyword}\n  ${b.error}`).join("\n\n");
+    await sendAlert(
+      `[Community Scout] ${newlyBroken.length} Tavily quer${newlyBroken.length === 1 ? "y" : "ies"} hit 3 consecutive failures`,
+      `These queries just failed 3 times in a row (no further alert until they recover and re-break):\n\n${lines}`,
+    );
   }
 }
 
@@ -336,6 +433,7 @@ async function runHnScan(): Promise<void> {
 export async function runCommunityScan(): Promise<void> {
   console.log("[community-scanner] starting");
   await Promise.allSettled([
+    runRedditNativeScan(),
     runTavilyScan(),
     runHnScan(),
   ]);

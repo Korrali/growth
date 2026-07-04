@@ -48,6 +48,17 @@ async function tavilySearch(query: string, maxResults = 10): Promise<SearchResul
 }
 
 async function webSearch(query: string, count = 10): Promise<SearchResult[]> {
+  // Reddit queries go through Reddit JSON API (free, no key needed) — saves Tavily quota.
+  // Reddit 403s datacenter IPs (EC2), so fall through to Tavily on any failure.
+  const redditMatch = query.match(/site:reddit\.com\s+r\/(\w+)\s+(.*)/);
+  if (redditMatch) {
+    try {
+      return await redditSearch(redditMatch[1], redditMatch[2], count);
+    } catch {
+      // fall through to Tavily/Brave below
+    }
+  }
+
   // Prefer Tavily (free tier); fall back to Brave if key is present
   if (process.env.TAVILY_API_KEY) return tavilySearch(query, count);
 
@@ -72,6 +83,47 @@ async function webSearch(query: string, count = 10): Promise<SearchResult[]> {
     title: r.title ?? "",
     url: r.url ?? "",
     description: r.description ?? "",
+  }));
+}
+
+// ─── Reddit JSON API (free, no auth) ─────────────────────────────────────────
+// Reddit exposes /r/{sub}/search.json — no key, just a User-Agent header.
+// We use this for all site:reddit.com queries so Tavily quota stays for web results.
+
+async function redditSearch(subreddit: string, query: string, limit = 10): Promise<SearchResult[]> {
+  const params = new URLSearchParams({
+    q: query,
+    restrict_sr: "on",
+    sort: "new",
+    t: "month",
+    limit: String(Math.min(limit, 25)),
+    raw_json: "1",
+  });
+  const url = `https://www.reddit.com/r/${subreddit}/search.json?${params}`;
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": "KorraliGrowth/1.0 (company discovery)" },
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Reddit search error ${res.status}: ${body}`);
+  }
+
+  const data = (await res.json()) as {
+    data?: {
+      children?: Array<{
+        data?: { title?: string; url?: string; selftext?: string; permalink?: string };
+      }>;
+    };
+  };
+
+  return (data.data?.children ?? []).map((c) => ({
+    title: c.data?.title ?? "",
+    url: c.data?.url && !c.data.url.startsWith("/r/")
+      ? c.data.url
+      : `https://reddit.com${c.data?.permalink ?? ""}`,
+    description: (c.data?.selftext ?? "").slice(0, 400),
   }));
 }
 
@@ -143,6 +195,10 @@ const QUERY_SET_A = [
   // Reddit — Revenue ICP intent signals
   `site:reddit.com r/stripe "failed payments" SaaS subscription`,
   `site:reddit.com r/SaaS "billing" Stripe subscription problem startup`,
+  // Revenue ICP — membership/creator businesses on Stripe (segment 2)
+  `paid community OR membership site Skool OR Circle OR "Mighty Networks" founder revenue`,
+  `course creator Kajabi OR Podia OR Teachable business "failed payments" OR churn`,
+  `paid newsletter OR membership business Stripe recurring revenue creator`,
   // BillClear ICP — self-funded employers, benefits brokers, TPAs
   `"self-funded" OR "self-insured" employer health plan benefits costs company`,
   `benefits broker OR "benefits consultant" firm employer health plans clients`,
@@ -178,6 +234,10 @@ const QUERY_SET_B = [
   // Reddit — Revenue ICP intent signals
   `site:reddit.com r/startups "Stripe" billing subscription issue startup`,
   `site:reddit.com r/entrepreneurship "failed payments" OR "payment recovery" SaaS`,
+  // Revenue ICP — membership/creator businesses on Stripe (segment 2, fresh angles)
+  `Skool OR Circle community owner "monthly members" revenue business`,
+  `membership site OR "online academy" founder Stripe subscriptions growing`,
+  `site:reddit.com r/coursecreators "failed payments" OR Stripe OR churn`,
   // BillClear ICP — fresh angles
   `employer "healthcare costs" self-funded plan benefits leader reduce spend`,
   `"level-funded" OR "self-funded" health plan employer 100 1000 employees`,
@@ -188,18 +248,19 @@ const QUERY_SET_B = [
   `caregiver platform OR "family caregiving" app medication tracking partnership`,
 ];
 
-// Pick the query set for this run: alternate weekly so consecutive daily runs use
-// the same set but back-to-back weeks use different sets, maximising novelty.
+// Pick the query set for this run: alternate daily. Weekly rotation exhausted
+// each set (runs kept re-finding the same domains all week: found=187 new=0),
+// so daily alternation doubles novelty at the same per-run Tavily cost.
 function pickQuerySet(): string[] {
-  const weekNumber = Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 7));
-  return weekNumber % 2 === 0 ? QUERY_SET_A : QUERY_SET_B;
+  const dayNumber = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+  return dayNumber % 2 === 0 ? QUERY_SET_A : QUERY_SET_B;
 }
 
 // ─── Extraction prompt ────────────────────────────────────────────────────────
 
 const EXTRACT_SYSTEM = `You are extracting B2B SaaS companies from web search results.
 For each company found in the results, extract their data. Only extract real companies — skip news sites, blogs, agencies, and marketplaces.
-Respond with valid JSON only: an array of company objects.`;
+Respond with valid JSON only: an object with a "companies" array of company objects.`;
 
 interface ExtractedCompany {
   name: string;
@@ -210,21 +271,30 @@ interface ExtractedCompany {
   employeeCount: number | null;
 }
 
+// Root must be an object — structured outputs rejects/mishandles top-level
+// array schemas, which broke every discovery run ("extracted is not iterable").
 const EXTRACT_SCHEMA = {
-  type: "array" as const,
-  items: {
-    type: "object" as const,
-    properties: {
-      name: { type: "string" },
-      domain: { type: "string", description: "bare domain like acme.com" },
-      website: { type: "string", description: "full https URL" },
-      description: { type: "string", description: "1-2 sentences from search snippet" },
-      industry: { type: "string" },
-      employeeCount: { type: ["number", "null"] },
+  type: "object" as const,
+  properties: {
+    companies: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          name: { type: "string" },
+          domain: { type: "string", description: "bare domain like acme.com" },
+          website: { type: "string", description: "full https URL" },
+          description: { type: "string", description: "1-2 sentences from search snippet" },
+          industry: { type: "string" },
+          employeeCount: { type: ["number", "null"] },
+        },
+        required: ["name", "domain", "website", "description", "industry", "employeeCount"],
+        additionalProperties: false,
+      },
     },
-    required: ["name", "domain", "website", "description", "industry", "employeeCount"],
-    additionalProperties: false,
   },
+  required: ["companies"],
+  additionalProperties: false,
 };
 
 async function extractCompaniesFromResults(
@@ -254,7 +324,11 @@ async function extractCompaniesFromResults(
   if (!block || block.type !== "text") return [];
 
   try {
-    return JSON.parse(block.text) as ExtractedCompany[];
+    const parsed = JSON.parse(block.text) as
+      | ExtractedCompany[]
+      | { companies?: ExtractedCompany[] };
+    if (Array.isArray(parsed)) return parsed;
+    return Array.isArray(parsed.companies) ? parsed.companies : [];
   } catch {
     return [];
   }
@@ -345,7 +419,9 @@ export async function discoverCompanies(runId: string): Promise<void> {
         }
       }
     } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
+      // Truncate — provider error bodies can be full HTML pages (Reddit 403s
+      // once stuffed a 180KB page into DiscoveryRun.error).
+      lastError = (err instanceof Error ? err.message : String(err)).slice(0, 500);
       console.error(`[discoverer] query failed: "${query}"`, lastError);
     }
   }

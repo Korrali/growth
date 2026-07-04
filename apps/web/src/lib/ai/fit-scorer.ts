@@ -5,6 +5,75 @@ import { FitProduct } from "@prisma/client";
 import { enqueueFitScore, enqueueContactFind } from "@/lib/queue";
 import { PRODUCTS, MARKETED_PRODUCT_KEYS } from "@/lib/products";
 
+// ─── Landing page analysis ────────────────────────────────────────────────────
+
+interface LandingPageAnalysis {
+  headline: string;
+  cta: string;
+  positioningSuggestion: string;
+}
+
+const LANDING_ANALYSIS_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    headline: { type: "string" },
+    cta: { type: "string" },
+    positioningSuggestion: {
+      type: "string",
+      description: "One specific, actionable observation about how they could improve their positioning to better convert their ideal buyers",
+    },
+  },
+  required: ["headline", "cta", "positioningSuggestion"],
+  additionalProperties: false,
+};
+
+async function fetchPageContent(url: string): Promise<string | null> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const res = await fetch("https://api.tavily.com/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey, urls: [url] }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { results?: Array<{ raw_content?: string }> };
+    return data.results?.[0]?.raw_content?.slice(0, 3000) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function analyzeLandingPage(url: string): Promise<LandingPageAnalysis | null> {
+  const content = await fetchPageContent(url);
+  if (!content) return null;
+  try {
+    const response = await anthropic.messages.create({
+      model: BULK_MODEL,
+      max_tokens: 256,
+      system: "Extract landing page signals for cold email personalization. Respond with valid JSON only.",
+      messages: [
+        {
+          role: "user",
+          content: `From this landing page content, extract:
+- headline: the main headline text
+- cta: the primary call-to-action button text
+- positioningSuggestion: one specific observation about how they could sharpen their positioning to better convert their ideal buyers (1-2 sentences)
+
+Page content:
+${content}`,
+        },
+      ],
+      output_config: { format: { type: "json_schema", schema: LANDING_ANALYSIS_SCHEMA } },
+    });
+    const block = response.content.find((b) => b.type === "text");
+    if (!block || block.type !== "text") return null;
+    return JSON.parse(block.text) as LandingPageAnalysis;
+  } catch {
+    return null;
+  }
+}
+
 const CONTACT_FIND_THRESHOLD = 6;
 
 export interface FitScoreResult {
@@ -133,6 +202,17 @@ export async function scoreFitForCompany(companyId: string): Promise<FitScoreRes
     outputData!.fitScore >= CONTACT_FIND_THRESHOLD &&
     outputData!.fitProduct !== "REJECT"
   ) {
+    // Analyze landing page before contact find so Step 1 emails have website context.
+    // Best-effort: errors are swallowed so contact find is never blocked.
+    const websiteUrl = company.website || `https://${company.domain}`;
+    const landingAnalysis = await analyzeLandingPage(websiteUrl).catch(() => null);
+    if (landingAnalysis) {
+      await prisma.company.update({
+        where: { id: companyId },
+        data: { landingPageAnalysis: landingAnalysis as unknown as import("@prisma/client").Prisma.JsonObject },
+      });
+    }
+
     await enqueueContactFind({ companyId });
   }
 

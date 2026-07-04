@@ -12,6 +12,25 @@ export default async function RootPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Service",
+            name: "Korrali Growth",
+            url: "https://growth.korrali.com",
+            serviceType: "Done-for-you B2B outbound / cold email service",
+            provider: { "@type": "Organization", name: "Korrali", url: "https://korrali.com" },
+            description:
+              "Done-for-you B2B outbound: AI-verified email discovery, personalized cold-email sequences, and AI reply classification.",
+            offers: [
+              { "@type": "Offer", name: "Retainer", price: "500", priceCurrency: "USD" },
+              { "@type": "Offer", name: "Pay-per-meeting", price: "150", priceCurrency: "USD" },
+            ],
+          }),
+        }}
+      />
 
       {/* Header */}
       <header className="border-b border-border/60 bg-background sticky top-0 z-50">

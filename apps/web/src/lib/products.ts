@@ -64,15 +64,17 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
     brand: "Korrali",
     url: "https://revenue.korrali.com",
     oneLiner:
-      "Subscription billing health monitoring — detects failed payments, revenue leakage, duplicate charges, and billing anomalies for Stripe-based SaaS.",
-    icp: `Good fit (score 6–10): Any subscription SaaS generating revenue. Stronger signals: subscription or usage-based pricing model, engineering team is small relative to customer base (billing is deprioritised), scaling MRR (any stage from post-revenue seed to series B), Stripe mentioned in tech stack or job postings, no dedicated billing ops or RevOps hire, has multiple pricing tiers or seats-based billing.
+      "Revenue recovery for Stripe businesses — detects failed payments, revenue leakage, duplicate charges, and billing anomalies, then recovers the money. The headline offer is performance pricing: pay nothing unless we recover revenue (10% of recovered, capped at $5K/mo). A one-time $499 Stripe revenue audit is the low-commitment entry point.",
+    icp: `Good fit (score 6–10): Any subscription business on Stripe doing meaningful volume. The sweet spot is $50K+ MRR — there 3–8% revenue leakage is thousands of dollars a month and statistically near-certain. Businesses under ~$10K MRR usually have too little volume to show leaks; score them 4–5 unless other signals are strong. Two segments qualify equally:
+1. Subscription SaaS: subscription or usage-based pricing, engineering team small relative to customer base (billing is deprioritised), scaling MRR (post-revenue seed to series B), Stripe in tech stack or job postings, no billing-ops/RevOps hire, multiple pricing tiers or seat-based billing.
+2. Membership and creator businesses on Stripe: paid communities (Skool, Circle, Mighty Networks), course platforms (Kajabi, Podia, Teachable), paid newsletters, membership sites, coaching programs with recurring billing. These have worse payment hygiene than SaaS and no tooling culture — high leak rates and zero incumbent competition.
 
 ALWAYS REJECT — these are competitors or non-buyers for Revenue:
 - Any company whose core product IS subscription analytics, revenue intelligence, failed payment recovery, dunning management, billing health monitoring, MRR/churn reporting, or subscription billing infrastructure. Named examples: Baremetrics, ChartMogul, ProfitWell, Maxio (formerly ProfitWell), Paddle (billing platform), Recurly, Chargebee, Stunning, Gravy, Churnbuster, Payfunnels, Stripe Radar, MoonClerk. Apply this rule to ANY company fitting that description, not just named ones.
 - Signals that a company IS a competitor: their product helps OTHER SaaS companies track MRR, recover failed payments, reduce churn, manage subscriptions, or monitor billing health. If their customers are SaaS founders using their tool to understand their own revenue — they are a competitor.
-- Non-subscription businesses (one-time purchase, services, agencies), companies with dedicated billing engineering teams, enterprise companies with custom invoicing only.`,
+- One-time-purchase businesses with no recurring component, services firms and agencies billing by invoice, companies with dedicated billing engineering teams, enterprise companies with custom invoicing only.`,
     buyers:
-      "Founders, CTOs, RevOps at subscription SaaS companies running on Stripe.",
+      "Founders, CTOs, RevOps at subscription SaaS companies running on Stripe; owners of paid communities, course platforms, and membership businesses.",
     personas: [
       '"vp engineering"',
       '"head of engineering"',
