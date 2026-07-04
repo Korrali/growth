@@ -7,16 +7,27 @@ export default async function LoginPage() {
   const session = await auth();
   if (session?.user) redirect("/growth");
 
+  const isUat = (process.env.NEXTAUTH_URL ?? "").includes("-uat.");
+  const korraliHome = isUat ? "https://uat.korrali.com" : "https://korrali.com";
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <header className="border-b border-border/60 bg-background">
-        <div className="mx-auto max-w-6xl px-6 h-16 flex items-center">
+        <div className="relative mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
           <Link href="/" className="flex items-center gap-2.5 font-semibold">
             <span className="inline-grid h-8 w-8 place-items-center rounded-md bg-accent text-sm font-bold text-white">
               K
             </span>
             <span className="text-base">Korrali Growth</span>
           </Link>
+          <a
+            href={korraliHome}
+            className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/20 sm:inline-flex"
+          >
+            <span className="inline-grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-white">K</span>
+            Korrali
+          </a>
+          <div />
         </div>
       </header>
 

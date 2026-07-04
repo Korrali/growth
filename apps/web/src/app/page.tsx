@@ -34,16 +34,16 @@ export default async function RootPage() {
 
       {/* Header */}
       <header className="border-b border-border/60 bg-background sticky top-0 z-50">
-        <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between">
+        <div className="relative mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
           <Link href="/" className="flex items-center gap-2.5 font-semibold">
             <span className="inline-grid h-8 w-8 place-items-center rounded-md bg-accent text-sm font-bold text-white">K</span>
             <span className="text-base">Korrali Growth</span>
           </Link>
+          <a href={korraliHome} className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/20 sm:inline-flex">
+            <span className="inline-grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-white">K</span>
+            Korrali
+          </a>
           <div className="flex items-center gap-2">
-            <a href={korraliHome} className="hidden items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/20 sm:inline-flex">
-              <span className="inline-grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-white">K</span>
-              Korrali
-            </a>
             <Link href="/login" className="hidden sm:inline-flex rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
               Sign in
             </Link>
