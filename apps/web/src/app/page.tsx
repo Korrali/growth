@@ -40,8 +40,9 @@ export default async function RootPage() {
             <span className="text-base">Korrali Growth</span>
           </Link>
           <div className="flex items-center gap-2">
-            <a href={korraliHome} className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted">
-              <span aria-hidden>←</span> Korrali
+            <a href={korraliHome} className="hidden items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/20 sm:inline-flex">
+              <span className="inline-grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-white">K</span>
+              Korrali
             </a>
             <Link href="/login" className="hidden sm:inline-flex rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
               Sign in
