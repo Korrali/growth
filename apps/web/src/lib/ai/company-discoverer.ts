@@ -166,7 +166,8 @@ async function hnShowHnCompanies(): Promise<SearchResult[]> {
 }
 
 // ─── ICP search queries ───────────────────────────────────────────────────────
-// Two sets of 16. Each run picks one set based on the current week number —
+// Two sets, one per product's ICP angles (grown past the original 16 as more
+// segments were added). Each run picks one set based on the current day —
 // so consecutive daily runs alternate between sets. With the Tavily `days: 60`
 // recency filter, even repeated queries find new companies published since last run.
 
@@ -207,6 +208,18 @@ const QUERY_SET_A = [
   // MedScan partnerships — telehealth, pharmacy, senior care
   `telehealth OR "virtual care" startup medication management patients`,
   `"senior care" OR "home care" company medication management caregivers`,
+  // MedScan partnerships — corporate wellness/EAP, rehab/PT/urgent-care (broadened)
+  `corporate wellness OR "employee assistance program" provider health tools partnership`,
+  `physical therapy OR rehab clinic OR "urgent care" patients medication management app`,
+  // Trust ICP — non-SaaS B2B selling to enterprise (broadened beyond "SaaS")
+  `IT managed service provider OR MSP enterprise clients "security review" OR "vendor questionnaire"`,
+  `data processing OR data platform company enterprise customers compliance SOC2`,
+  // Growth Service ICP — early-stage B2B, not SaaS-specific (broadened)
+  `early-stage B2B startup no sales team founder outbound struggling`,
+  `bootstrapped B2B startup first customers cold email OR outbound results`,
+  // BillClear ICP — fully-insured / broader employer size (broadened beyond self-funded)
+  `mid-size company "open enrollment" employee health benefits HR team`,
+  `"employee benefits" HR director company health plan cost savings`,
 ];
 
 const QUERY_SET_B = [
@@ -246,6 +259,18 @@ const QUERY_SET_B = [
   // MedScan partnerships — fresh angles
   `pharmacy chain OR "independent pharmacy" patient app medication adherence`,
   `caregiver platform OR "family caregiving" app medication tracking partnership`,
+  // MedScan partnerships — corporate wellness/EAP, rehab/PT/urgent-care (broadened, fresh angles)
+  `employer wellness program OR EAP vendor partnership health app`,
+  `"urgent care" OR rehab clinic patient medication tracking partnership app`,
+  // Trust ICP — non-SaaS B2B selling to enterprise (broadened, fresh angles)
+  `fintech OR "data processor" startup enterprise customers "SOC 2" OR "security review"`,
+  `IT services company OR managed security provider enterprise clients compliance`,
+  // Growth Service ICP — early-stage B2B, not SaaS-specific (broadened, fresh angles)
+  `founder "our first customers" B2B startup no sales hire outbound`,
+  `site:reddit.com r/startups "cold email" OR "outbound" struggling founder B2B`,
+  // BillClear ICP — fully-insured / broader employer size (broadened, fresh angles)
+  `company employee benefits renewal HR "healthcare costs" 50 500 employees`,
+  `site:reddit.com r/humanresources open enrollment health benefits cost concerns`,
 ];
 
 // Pick the query set for this run: alternate daily. Weekly rotation exhausted

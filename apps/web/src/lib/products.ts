@@ -32,11 +32,11 @@ export const PRODUCTS: Record<MarketedProduct, ProductProfile> = {
     url: "https://trust.korrali.com",
     oneLiner:
       "Compliance and trust workspace — answer security questionnaires in minutes, generate SOC2/ISO27001 policy docs, and publish a public trust page.",
-    icp: `Good fit (score 6–10): Any B2B SaaS that sells to enterprise OR mid-market (100+ employee buyers). The company doesn't need to be AI-native — any SaaS product used by large companies faces questionnaires. Stronger signals: named enterprise/mid-market customers on their website, an "enterprise" pricing tier, a careers page showing they're hiring sales engineers or solutions engineers, recent funding (seed to series B), building integrations for enterprise tools (SSO, SAML, SCIM, Salesforce). Even stronger: mentions of SOC2 in progress, security page exists but is thin, no trust center yet.
+    icp: `Good fit (score 6–10): Any B2B company that sells to enterprise OR mid-market (100+ employee buyers) and therefore faces vendor security reviews as a result. The real trigger is "sells to enterprise/mid-market buyers," not "is SaaS" — cloud or on-prem software, IT/managed service providers, data processors, fintechs, and any other B2B company that touches an enterprise customer's data or systems gets the same questionnaires a SaaS company does. Stronger signals: named enterprise/mid-market customers on their website, an "enterprise" pricing tier, a careers page showing they're hiring sales engineers or solutions engineers, recent funding (seed to series B), building integrations for enterprise tools (SSO, SAML, SCIM, Salesforce). Even stronger: mentions of SOC2 in progress, security page exists but is thin, no trust center yet.
 
 ALWAYS REJECT — these are competitors or non-buyers for Trust:
 - Any company whose core product IS compliance automation, security questionnaire management, trust center software, SOC2 readiness, vendor risk management, or GRC tooling. Named examples: Vanta, Drata, Secureframe, Scrut, TrustCloud, Tugboat Logic, Sprinto, Conveyor, SafeBase, Whistic, Hyperproof, Laika, Strike Graph. But apply this rule to ANY company fitting that description, not just named ones.
-- Consumer apps, marketplaces, agencies, non-software businesses, companies that already have a mature public trust center.
+- Consumer apps, marketplaces, agencies, companies that already have a mature public trust center. Being non-software isn't itself disqualifying (an MSP or data processor selling to enterprise still qualifies) — but the company must genuinely be selling B2B into enterprise/mid-market accounts, not just any non-software business.
 
 ALWAYS REJECT (score 1–3) regardless of other signals — these companies are not buyers yet:
 - Fewer than 10 employees: too early-stage, no enterprise clients, no questionnaires incoming
@@ -44,7 +44,7 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
 - No visible product or customers: if there's no product page, no pricing, no case studies, they aren't selling yet
 - Solo founder / side project: no organisational compliance exposure`,
     buyers:
-      "CTOs, heads of security, compliance managers at 10–500 person SaaS companies selling to enterprise.",
+      "CTOs, heads of security, compliance managers at 10–500 person B2B companies (software, IT services, or data processing) selling to enterprise.",
     personas: [
       '"head of security"',
       '"ciso"',
@@ -109,17 +109,20 @@ ALWAYS REJECT — these are competitors or non-buyers for Revenue:
       "AI medical bill auditing — finds billing errors (duplicates, upcoding, No Surprises Act violations) and generates dispute letters, offered to employees as a benefit.",
     icp: `B2B only — we sell BillClear as an employee benefit, never door-to-door to patients.
 
-Good fit (score 6–10): US companies with 100–5,000 employees, especially self-funded health plans (they directly eat billing errors). Strong signals: benefits/total-rewards roles on the careers page, mentions of self-funded or level-funded health plans, an internal HR/people-ops team, industries with high healthcare utilisation (manufacturing, logistics, retail, healthcare staffing). Also good: benefits brokers, benefits consultants, and TPAs (third-party administrators) who can offer BillClear across their book of clients, and HR-tech platforms that bundle employee benefits.
+Good fit (score 6–10): US companies with 50–5,000 employees offering health benefits, especially self-funded or level-funded plans (they directly eat billing errors, so the savings argument to the employer is direct). Strong signals: benefits/total-rewards roles on the careers page, mentions of self-funded or level-funded health plans, an internal HR/people-ops team, industries with high healthcare utilisation (manufacturing, logistics, retail, healthcare staffing). Also good: benefits brokers, benefits consultants, and TPAs (third-party administrators) who can offer BillClear across their book of clients, and HR-tech platforms that bundle employee benefits.
 
-ALWAYS REJECT: non-US companies (the product leans on US billing rules like the No Surprises Act), hospitals and provider groups (they are the counterparty to disputes), health insurers, companies under 50 employees, and competitors — medical bill negotiation or patient advocacy services (e.g. Goodbill, Resolve Medical Bills, CoPatient) or any company whose core product is medical bill review.`,
+Also good fit (score 5–7): Fully-insured US employers of any size (50+ employees) offering health benefits. The direct-cost-savings argument to the employer is weaker here — the insurer bears claims risk, not the employer — but employee satisfaction/retention and total healthcare spend visibility are still real value, and fully-insured employers are a far larger market than self-funded alone. Don't reject a company just because it isn't confirmed self-funded.
+
+ALWAYS REJECT: non-US companies (the product leans on US billing rules like the No Surprises Act), hospitals and provider groups (they are the counterparty to disputes), health insurers, companies under 50 employees (too small to have a benefits function to sell into), and competitors — medical bill negotiation or patient advocacy services (e.g. Goodbill, Resolve Medical Bills, CoPatient) or any company whose core product is medical bill review.`,
     buyers:
-      "Heads of benefits / total rewards, CHROs, VPs of people at 100–5,000 employee US companies; benefits brokers and TPAs.",
+      "Heads of benefits / total rewards, CHROs, VPs of people at US companies with 50+ employees offering health benefits; benefits brokers and TPAs.",
     personas: [
       '"head of benefits"',
       '"total rewards"',
       '"chro"',
       '"vp people"',
       '"benefits manager"',
+      '"hr manager"',
       '"benefits broker"',
       '"benefits consultant"',
     ],
@@ -136,7 +139,7 @@ ALWAYS REJECT: non-US companies (the product leans on US billing rules like the 
       "Consumer mobile app — photograph a medicine to identify it, see FDA label information, and check drug interactions.",
     icp: `MedScan is a consumer app, so companies only qualify as PARTNERSHIP targets, never as direct buyers.
 
-Good fit (score 6–10, partnerships only): telehealth providers, independent and regional pharmacy chains, senior-care and home-care organisations, caregiver-support platforms, and pill-pack / medication-management services that could recommend or embed MedScan for their users.
+Good fit (score 6–10, partnerships only): telehealth providers, independent and regional pharmacy chains, senior-care and home-care organisations, caregiver-support platforms, and pill-pack / medication-management services that could recommend or embed MedScan for their users. Also good fit: corporate wellness / EAP (employee assistance program) providers who distribute health tools to employees, and physical therapy / rehab / urgent-care clinics whose patients are managing multiple new medications — same "recommend or embed a free tool for your users" motion as telehealth.
 
 ALWAYS REJECT: ordinary B2B SaaS companies (no reason to care about medicine scanning), hospitals' procurement arms, pharma manufacturers, and competitors — other medicine-identification or drug-interaction apps.`,
     buyers:
@@ -159,14 +162,14 @@ ALWAYS REJECT: ordinary B2B SaaS companies (no reason to care about medicine sca
     url: "https://korrali.com",
     oneLiner:
       "AI-powered done-for-you B2B outreach — we find your ICP, verify every email, and run personalized sequences so you wake up to interested replies.",
-    icp: `Good fit (score 6-10): B2B SaaS founders or co-founders with 2-20 employees, 6-36 months old, selling to other businesses, bootstrapped or seed-stage, no dedicated sales hire yet.
+    icp: `Good fit (score 6-10): Early-stage B2B founders or co-founders with 2-20 employees, 6-36 months old, selling to other businesses, bootstrapped or seed-stage, no dedicated sales hire yet. Doesn't need to be SaaS — any B2B company (software, services, or product) that needs outbound and can't yet justify a full-time SDR has the identical pain and qualifies equally.
 
 Observable signals: recent ProductHunt launch, Indie Hackers post, Y Combinator batch, blog post about getting first customers, LinkedIn content about struggling with sales or outbound.
 
 Pain: no time for outbound, can't afford a $70K SDR, have tried cold email and either burned their domain or given up, rely entirely on inbound/referrals.
 
-ALWAYS REJECT: companies with a sales team (AE/SDR job titles visible on LinkedIn), agencies, non-SaaS businesses, consumer apps, companies that sell outbound/SDR tools themselves.`,
-    buyers: "Founders, co-founders of B2B SaaS startups.",
+ALWAYS REJECT: companies with a sales team (AE/SDR job titles visible on LinkedIn), agencies (they either do their own outbound or compete with this exact service), consumer apps, companies that sell outbound/SDR tools themselves.`,
+    buyers: "Founders, co-founders of early-stage B2B startups.",
     personas: ['"founder"', '"co-founder"', '"ceo"', '"cto"'],
     outboundViable: true,
     seoCta: "Book a 15-min demo at korrali.com",
