@@ -75,7 +75,19 @@ ALWAYS REJECT — these are competitors or non-buyers for Revenue:
 - One-time-purchase businesses with no recurring component, services firms and agencies billing by invoice, companies with dedicated billing engineering teams, enterprise companies with custom invoicing only.`,
     buyers:
       "Founders, CTOs, RevOps at subscription SaaS companies running on Stripe; owners of paid communities, course platforms, and membership businesses.",
+    // Founder/CEO lead the list — contact-finder.ts already searches for
+    // founder/CEO/co-founder ahead of anything else for companies under 50
+    // employees (personasForProduct's SMALL_CO_PERSONAS override), which
+    // covers most solo creator/community businesses. But that override only
+    // kicks in below the 50-employee threshold, so a mid-sized course
+    // platform or membership business with real headcount (support/content
+    // teams, no engineering org) would otherwise only ever be searched
+    // against "vp engineering" / "revops" / "cto" — titles that segment
+    // rarely has. Founder/CEO are valid targets for the SaaS segment too,
+    // so this doesn't cost anything there.
     personas: [
+      '"founder"',
+      '"ceo"',
       '"vp engineering"',
       '"head of engineering"',
       '"revops"',

@@ -258,7 +258,12 @@ function pickQuerySet(): string[] {
 
 // ─── Extraction prompt ────────────────────────────────────────────────────────
 
-const EXTRACT_SYSTEM = `You are extracting B2B SaaS companies from web search results.
+// Deliberately product-agnostic — query sets cover several ICPs (B2B SaaS,
+// membership/creator platforms, self-funded employers, telehealth/pharmacy
+// partners...) that grows over time. Gating extraction on any one of those
+// descriptions would silently drop the others; fit-scorer.ts is where
+// per-product ICP matching actually happens, not here.
+const EXTRACT_SYSTEM = `You are extracting companies (organizations, businesses) mentioned in web search results.
 For each company found in the results, extract their data. Only extract real companies — skip news sites, blogs, agencies, and marketplaces.
 Respond with valid JSON only: an object with a "companies" array of company objects.`;
 
