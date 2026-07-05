@@ -210,7 +210,7 @@ export default async function RootPage() {
           <div className="rounded-xl border border-success/30 bg-success/5 p-6">
             <p className="font-semibold text-foreground mb-4">Strong fit ✓</p>
             <ul className="space-y-3 text-sm text-muted-foreground leading-relaxed">
-              <li className="flex gap-2"><span className="text-success shrink-0">•</span><span>B2B SaaS founders, 2–20 employees, 6–36 months in. Selling to other businesses.</span></li>
+              <li className="flex gap-2"><span className="text-success shrink-0">•</span><span>Early-stage B2B founders (software, services, or product), 2–20 employees, 6–36 months in. Selling to other businesses.</span></li>
               <li className="flex gap-2"><span className="text-success shrink-0">•</span><span>No dedicated SDR or sales hire yet — you&apos;re the closer, not the prospector.</span></li>
               <li className="flex gap-2"><span className="text-success shrink-0">•</span><span>You tried cold email, burned a domain, and gave up — or you&apos;ve been meaning to start and never had time.</span></li>
               <li className="flex gap-2"><span className="text-success shrink-0">•</span><span>Bootstrapped or seed-stage. A $70K SDR salary is off the table.</span></li>
