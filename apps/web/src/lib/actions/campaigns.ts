@@ -3,6 +3,7 @@
 import { requireRole } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { CampaignProduct, CampaignStatus } from "@prisma/client";
+import { PRODUCTS, type MarketedProduct } from "@/lib/products";
 
 export async function createCampaignAction(formData: FormData): Promise<void> {
   await requireRole("MEMBER");
@@ -45,6 +46,18 @@ export async function updateCampaignStatusAction(
   status: CampaignStatus,
 ): Promise<void> {
   await requireRole("MEMBER");
+
+  if (status === CampaignStatus.ACTIVE) {
+    const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
+    const product = campaign.product as MarketedProduct;
+    if (!PRODUCTS[product]?.outboundViable) {
+      throw new Error(
+        `${PRODUCTS[product]?.name ?? product} is not outbound-viable — cannot activate this campaign. ` +
+        `Check outboundViable in lib/products.ts before flipping this to ACTIVE.`,
+      );
+    }
+  }
+
   await prisma.campaign.update({ where: { id: campaignId }, data: { status } });
 }
 

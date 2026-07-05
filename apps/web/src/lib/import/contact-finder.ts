@@ -179,6 +179,13 @@ async function autoEnqueueOutreach(
   // BOTH → prefer TRUST campaign; REJECT is already filtered upstream
   const product = fitProduct === "BOTH" ? "TRUST" : (fitProduct as MarketedProduct);
 
+  // Belt-and-suspenders: findContactForCompany already skips discovery for
+  // non-outbound-viable products, but this function can also be reached via
+  // the "existing contact" path, so check again here rather than trust the
+  // caller. sendOutreachStep's eligibility gate is the true last line of
+  // defense regardless — this just avoids creating the Outreach row at all.
+  if (!PRODUCTS[product]?.outboundViable) return false;
+
   const campaign = await prisma.campaign.findFirst({
     where: { product, status: "ACTIVE" },
     orderBy: { createdAt: "asc" }, // oldest = most established campaign
@@ -222,6 +229,15 @@ export async function findContactForCompany(companyId: string): Promise<void> {
 
   if (!company.fitProduct || company.fitProduct === "REJECT") return;
   if (!company.domain) return;
+
+  // Never spend a Tavily/Claude call discovering a contact for a product
+  // that isn't outbound-viable (e.g. MedScan — consumer app, not ready for
+  // outreach). autoEnqueueOutreach has its own belt-and-suspenders check
+  // for the "existing contact" path below, but there's no reason to run
+  // the discovery search at all if we already know we won't act on it.
+  const discoveryProductKey =
+    company.fitProduct === "BOTH" ? "TRUST" : (company.fitProduct as MarketedProduct);
+  if (!PRODUCTS[discoveryProductKey]?.outboundViable) return;
 
   // Skip if we already have a non-suppressed contact for this company
   const existing = await prisma.contact.findFirst({

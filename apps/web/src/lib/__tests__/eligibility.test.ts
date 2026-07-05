@@ -17,6 +17,7 @@ import { prisma } from "@/lib/db";
 import { checkSendEligibility } from "@/lib/sending/eligibility";
 
 const ACTIVE_CAMPAIGN = {
+  product: "REVENUE",
   status: "ACTIVE",
   dailyLimit: 20,
   perDomainLimit: 1,
@@ -97,6 +98,16 @@ describe("checkSendEligibility", () => {
     const result = await checkSendEligibility("outreach-1", 1);
     expect(result.eligible).toBe(false);
     expect(result.reason).toContain("campaign_not_active");
+  });
+
+  it("Gate 1.5: blocks when the campaign's product is not outbound-viable (MedScan)", async () => {
+    vi.mocked(prisma.outreach.findUnique).mockResolvedValue({
+      ...BASE_OUTREACH,
+      campaign: { ...ACTIVE_CAMPAIGN, product: "MEDSCAN" },
+    } as never);
+    const result = await checkSendEligibility("outreach-1", 1);
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toContain("product_not_outbound_viable");
   });
 
   it("Gate 3: blocks when contact is suppressed", async () => {

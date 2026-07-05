@@ -21,6 +21,7 @@ const TERMINAL_ELIGIBILITY_REASONS = new Set([
   "max_followups_exceeded",
   "fit_score_too_low",
   "quality_gate_blocked",
+  "product_not_outbound_viable",
 ]);
 
 // Transient failures: retry in 1 hour so the cron picks them up again.

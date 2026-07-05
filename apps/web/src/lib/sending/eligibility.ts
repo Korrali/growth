@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { isEmailSuppressed, isDomainSuppressed, extractDomain } from "@/lib/sending/suppression";
 import { EmailStatus, OutreachStatus, CampaignStatus } from "@prisma/client";
+import { PRODUCTS, type MarketedProduct } from "@/lib/products";
 
 export interface EligibilityResult {
   eligible: boolean;
@@ -65,6 +66,17 @@ export async function checkSendEligibility(
   });
 
   if (!outreach) return ineligible("outreach_not_found");
+
+  // Gate 1.5: Product must be marked outbound-viable (products.ts). This is
+  // the hard, last-line-of-defense check — it fires regardless of how the
+  // Outreach row came to exist (campaign misconfiguration, manual import,
+  // a future code path). MedScan is outboundViable=false: it's a consumer
+  // app not ready for outbound, and until now that flag was never actually
+  // read anywhere — purely descriptive, enforced nowhere.
+  const productKey = outreach.campaign.product as MarketedProduct;
+  if (!PRODUCTS[productKey]?.outboundViable) {
+    return ineligible(`product_not_outbound_viable:${productKey}`);
+  }
 
   // Gate 2: Campaign status = ACTIVE
   if (outreach.campaign.status !== CampaignStatus.ACTIVE) {
