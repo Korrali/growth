@@ -163,9 +163,13 @@ export async function scoreFitForCompany(companyId: string): Promise<FitScoreRes
 
     const parsed = JSON.parse(block.text) as FitScoreResult;
 
-    // Validate enum
+    // Validate enum. Groq doesn't hard-enforce json_schema enums and the
+    // cheap model sometimes omits or invents fitProduct — degrade to REJECT
+    // (a failed job would just retry into the same output and burn TPD budget).
     if (!Object.values(FitProduct).includes(parsed.fitProduct as FitProduct)) {
-      throw new Error(`Invalid fitProduct: ${parsed.fitProduct}`);
+      parsed.fitProduct = FitProduct.REJECT;
+      parsed.fitScore = Math.min(parsed.fitScore ?? 1, 5);
+      parsed.fitReasoning = `[auto-REJECT: model returned invalid fitProduct] ${parsed.fitReasoning ?? ""}`;
     }
     if (parsed.fitScore < 1 || parsed.fitScore > 10) {
       throw new Error(`fitScore out of range: ${parsed.fitScore}`);
