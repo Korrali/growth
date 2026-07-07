@@ -102,6 +102,8 @@ BOTH: if a company clearly fits both Korrali Trust and Korrali Revenue, use BOTH
 
 A company can only receive one fitProduct — pick the product where the pain is most acute and observable.
 
+ALWAYS REJECT companies that have been acquired, merged, or operate as a subsidiary of a larger company — they are not independent buyers regardless of other signals. If your reasoning concludes a company is a competitor or not a buyer, fitProduct MUST be REJECT and the score MUST be 1-3; never attach a passing score to disqualifying reasoning.
+
 Score 1–5 = weak or no fit (REJECT unless clearly 5). Score 6–7 = decent fit, worth outreach. Score 8–10 = strong fit, high priority.
 
 Respond with valid JSON only. No prose before or after the JSON.`;
@@ -173,6 +175,19 @@ export async function scoreFitForCompany(companyId: string): Promise<FitScoreRes
     }
     if (parsed.fitScore < 1 || parsed.fitScore > 10) {
       throw new Error(`fitScore out of range: ${parsed.fitScore}`);
+    }
+
+    // Coherence guard: the cheap model sometimes writes disqualifying
+    // reasoning but still emits a passing score (observed 2026-07-08:
+    // "they are a competitor ... not a buyer" scored 7/TRUST for Kolide —
+    // a 1Password subsidiary — and nearly got cold-emailed). When the
+    // model's own reasoning disqualifies the company, trust the reasoning.
+    const DISQUALIFYING =
+      /(is|are|they're)\s+(a\s+)?competitor|not\s+a\s+buyer|explicitly\s+excluded|been\s+acquired|acquired\s+by|subsidiary\s+of|shut\s+down|no\s+longer\s+(independent|operating)/i;
+    if (parsed.fitScore >= 6 && DISQUALIFYING.test(parsed.fitReasoning ?? "")) {
+      parsed.fitProduct = FitProduct.REJECT;
+      parsed.fitScore = Math.min(parsed.fitScore, 3);
+      parsed.fitReasoning = `[auto-REJECT: reasoning contradicts score] ${parsed.fitReasoning}`;
     }
 
     outputData = parsed;
