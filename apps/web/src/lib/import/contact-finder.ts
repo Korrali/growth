@@ -366,6 +366,23 @@ export async function findContactForCompany(companyId: string): Promise<void> {
     return;
   }
 
+  // When AMF is configured, its miss is the final answer: the Tavily+AI
+  // fallback below is 0-for-41 lifetime (2026-07-08) at ~2 Tavily credits per
+  // attempt — pure quota burn. Companies AMF can't resolve get logged and
+  // retried on later passes (its index grows), not searched.
+  if (process.env.ANYMAILFINDER_API_KEY) {
+    await prisma.auditLog.create({
+      data: {
+        actor: "system",
+        action: "contact.find.no_result",
+        entity: "Company",
+        entityId: companyId,
+        metadata: { companyName: company.name, domain: company.domain, source: "anymailfinder_miss" },
+      },
+    });
+    return;
+  }
+
   const personas = personasForProduct(company.fitProduct, company.employeeCount);
 
   // Build search queries — two passes: LinkedIn search + company team page
