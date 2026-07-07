@@ -92,6 +92,11 @@ export async function checkSendEligibility(
   if (contact.emailStatus === EmailStatus.INVALID) return ineligible("email_invalid");
   if (contact.emailStatus === EmailStatus.DISPOSABLE) return ineligible("email_disposable");
 
+  // Gate 3.6: Decision-makers only. Last line of defense regardless of how
+  // the Outreach row was created (auto-enroll, manual, legacy). Flip the
+  // contact's isBuyer flag to deliberately send to a non-C-level contact.
+  if (!contact.isBuyer) return ineligible("contact_not_buyer");
+
   // Gate 4: Suppression table checks
   if (await isEmailSuppressed(contact.email)) return ineligible("email_in_suppression_list");
   const domain = extractDomain(contact.email);

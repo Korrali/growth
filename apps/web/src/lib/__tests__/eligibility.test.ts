@@ -34,6 +34,7 @@ const ACTIVE_CONTACT = {
   email: "alice@acme.com",
   emailStatus: "UNVERIFIED",
   suppressedAt: null,
+  isBuyer: true,
 };
 
 const BASE_OUTREACH = {
@@ -118,6 +119,16 @@ describe("checkSendEligibility", () => {
     const result = await checkSendEligibility("outreach-1", 1);
     expect(result.eligible).toBe(false);
     expect(result.reason).toBe("contact_suppressed");
+  });
+
+  it("Gate 3.6: blocks when contact is not a buyer", async () => {
+    vi.mocked(prisma.outreach.findUnique).mockResolvedValue({
+      ...BASE_OUTREACH,
+      contact: { ...ACTIVE_CONTACT, isBuyer: false },
+    } as never);
+    const result = await checkSendEligibility("outreach-1", 1);
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toBe("contact_not_buyer");
   });
 
   it("Gate 3: blocks when emailStatus is INVALID", async () => {

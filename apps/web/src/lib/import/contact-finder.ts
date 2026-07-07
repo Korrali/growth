@@ -17,6 +17,7 @@ const SMALL_CO_PERSONAS = ['"ceo"', '"founder"', '"co-founder"'];
 const BUYER_TITLE_PATTERNS = [
   /\b(ceo|cto|ciso|coo|cfo|cpo)\b/i,
   /\b(founder|co-founder|cofounder)\b/i,
+  /\b(president|owner|managing director)\b/i,
   /\b(vp|vice president)\b.*(engineer|security|product|finance|revenue|infra)/i,
   /\b(head|director)\s+of\s+(security|trust|compliance|engineering|product|finance|revenue|infra)/i,
   /\b(engineering|security|compliance|product|revenue)\s+(manager|lead|director)\b/i,

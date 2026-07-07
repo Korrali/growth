@@ -79,8 +79,11 @@ export async function runAutoEnroll(): Promise<AutoEnrollSummary> {
       continue;
     }
 
-    const contact = company.contacts.find((c) => c.outreaches.length === 0);
-    if (!contact) continue; // every usable contact already has an outreach
+    // Decision-makers only — a non-buyer contact (engineer, staff role found
+    // incidentally) never auto-enrolls. Observed 2026-07-08: a "Healthcare
+    // Professional" contact was auto-enrolled and emailed before this check.
+    const contact = company.contacts.find((c) => c.isBuyer && c.outreaches.length === 0);
+    if (!contact) continue; // no un-enrolled buyer contact
 
     const campaignId = campaignFor[product];
     if (!campaignId) {
