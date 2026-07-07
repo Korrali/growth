@@ -27,6 +27,12 @@ async function tavilySearch(query: string, maxResults = 10): Promise<SearchResul
       search_depth: "basic",
       max_results: maxResults,
       include_answer: false,
+      // Without page content, extraction only sees title + ~300-char snippet
+      // and can only extract companies literally named there — i.e. the same
+      // famous names in every article (the found=311/new=0 saturation of
+      // 2026-06-18 → 2026-07-07). Raw content lets it find the long-tail
+      // companies the posts are actually about.
+      include_raw_content: true,
       days: 60, // only content published in the last 60 days — ensures each run finds new companies
     }),
   });
@@ -37,13 +43,15 @@ async function tavilySearch(query: string, maxResults = 10): Promise<SearchResul
   }
 
   const data = (await res.json()) as {
-    results?: Array<{ title?: string; url?: string; content?: string }>;
+    results?: Array<{ title?: string; url?: string; content?: string; raw_content?: string | null }>;
   };
 
   return (data.results ?? []).map((r) => ({
     title: r.title ?? "",
     url: r.url ?? "",
-    description: r.content ?? "",
+    // Prefer full page text (capped — extraction batches 10 results per AI
+    // call and HIGH_INTENT_MODEL context is finite); fall back to snippet.
+    description: r.raw_content ? r.raw_content.slice(0, 2500) : (r.content ?? ""),
   }));
 }
 
@@ -281,6 +289,8 @@ function pickQuerySet(): string[] {
 // per-product ICP matching actually happens, not here.
 const EXTRACT_SYSTEM = `You are extracting companies (organizations, businesses) mentioned in web search results.
 For each company found in the results, extract their data. Only extract real companies — skip news sites, blogs, agencies, and marketplaces.
+
+PRIORITIZE the long tail: small companies, indie SaaS products, and startups described by their own founders (e.g. a founder's product in a forum post, a "Show HN" launch, an IndieHackers milestone post) are the MOST valuable extractions. Extract them whenever the page names the product and you can determine its own domain. Do NOT limit yourself to famous companies that are merely name-dropped (payment processors, big vendors, well-known platforms mentioned in passing are the LEAST valuable).
 Respond with valid JSON only: an object with a "companies" array of company objects.`;
 
 interface ExtractedCompany {
