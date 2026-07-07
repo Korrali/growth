@@ -16,6 +16,7 @@ import { findContactForCompany } from "@/lib/import/contact-finder";
 import { runCommunityScan } from "@/lib/community/scanner";
 import { buildLinkedInDraft } from "@/lib/linkedin/draft-builder";
 import { processVisitor } from "@/lib/visitor/processor";
+import { runAutoEnroll } from "@/lib/enroll/auto-enroll";
 import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
@@ -50,7 +51,7 @@ async function main() {
     QUEUE_NAMES.COMPANY_DISCOVER, QUEUE_NAMES.CONTACT_FIND,
     "community-scan-trigger", "seo-topic-refresh", QUEUE_NAMES.COMMUNITY_SCAN,
     QUEUE_NAMES.LINKEDIN_DRAFT, QUEUE_NAMES.VISITOR_PROCESS,
-    "seo-auto-publish",
+    "seo-auto-publish", "auto-enroll-check",
   ];
   for (const q of allQueues) {
     await boss.createQueue(q);
@@ -271,6 +272,19 @@ async function main() {
     }
   });
 
+  // Every 2 hours: auto-enroll fit ≥6 companies into the matching active
+  // internal campaign (finds contacts first where missing). Send volume is
+  // still governed by campaign dailyLimit + MAX_SENDS_PER_DAY gates.
+  await boss.work("auto-enroll-check", async ([job]) => {
+    if (!job) return;
+    const summary = await runAutoEnroll();
+    if (summary.enrolled > 0 || summary.contactFindsQueued > 0) {
+      console.log(
+        `[cron] auto-enroll-check: enrolled=${summary.enrolled} contactFinds=${summary.contactFindsQueued} noCampaign=${summary.skippedNoCampaign}`,
+      );
+    }
+  });
+
   // Monday 6am UTC: generate weekly insights
   await boss.work("weekly-insights-trigger", async ([job]) => {
     if (!job) return;
@@ -463,6 +477,7 @@ async function main() {
   await boss.schedule("linkedin-draft-trigger",   "0 9 * * *");     // daily 9am UTC
   await boss.schedule("content-distribute-check", "*/30 * * * *");  // every 30 min
   await boss.schedule("seo-auto-publish",         "0 11 * * 2,4");  // Tue + Thu 11am UTC — 6 articles/week
+  await boss.schedule("auto-enroll-check",        "15 */2 * * *");  // every 2h — fit≥6 → contact → campaign
 
   console.log("[worker] all handlers registered, crons scheduled");
 }
