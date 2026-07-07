@@ -471,7 +471,7 @@ async function main() {
   await boss.schedule("outreach-due-check",       "*/15 * * * *");
   await boss.schedule("weekly-insights-trigger",  "0 6 * * 1");
   await boss.schedule("trial-daily-check",        "0 7 * * *");
-  await boss.schedule("company-discover-trigger", "0 5 * * 1-5");   // Mon-Fri 5am UTC
+  await boss.schedule("company-discover-trigger", "0 5 * * 1");     // Mon 5am UTC — weekly; free Tavily plan (~35 credits/run, keep <200/mo incl. community scans)
   await boss.schedule("community-scan-trigger",   "0 8 * * 1,3,5"); // Mon/Wed/Fri 8am UTC (Tavily budget)
   await boss.schedule("seo-topic-refresh",        "0 10 * * 1");    // weekly Mon 10am UTC
   await boss.schedule("linkedin-draft-trigger",   "0 9 * * *");     // daily 9am UTC
