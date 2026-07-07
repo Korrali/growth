@@ -48,6 +48,7 @@ interface AmfContact {
   firstName: string;
   lastName: string | null;
   title: string;
+  linkedinUrl: string | null;
   verified: boolean;
 }
 
@@ -79,11 +80,18 @@ async function findViaAnymailFinder(company: { name: string; domain: string }): 
     const status = typeof body.email_status === "string" ? body.email_status : null;
     if (!email || !email.includes("@") || (status !== "valid" && status !== "risky")) return null;
 
-    const fullName =
-      (typeof body.person_full_name === "string" && body.person_full_name) ||
-      (typeof body.full_name === "string" && body.full_name) ||
-      "";
-    let { firstName, lastName } = splitFullName(fullName);
+    // Live response (verified 2026-07-08) provides pre-split name fields;
+    // fall back to splitting person_full_name for older response shapes.
+    let firstName = typeof body.person_first_name === "string" ? body.person_first_name : "";
+    let lastName: string | null =
+      typeof body.person_last_name === "string" && body.person_last_name ? body.person_last_name : null;
+    if (!firstName) {
+      const fullName =
+        (typeof body.person_full_name === "string" && body.person_full_name) ||
+        (typeof body.full_name === "string" && body.full_name) ||
+        "";
+      ({ firstName, lastName } = splitFullName(fullName));
+    }
     if (!firstName) {
       // Personalization needs *something*; the mailbox localpart is the best
       // available guess when AMF returns no name.
@@ -95,8 +103,12 @@ async function findViaAnymailFinder(company: { name: string; domain: string }): 
       (typeof body.person_job_title === "string" && body.person_job_title) ||
       (typeof body.job_title === "string" && body.job_title) ||
       "CEO";
+    const linkedinUrl =
+      typeof body.person_linkedin_url === "string" && body.person_linkedin_url
+        ? body.person_linkedin_url
+        : null;
 
-    return { email: email.toLowerCase(), firstName, lastName, title, verified: status === "valid" };
+    return { email: email.toLowerCase(), firstName, lastName, title, linkedinUrl, verified: status === "valid" };
   } catch {
     return null;
   }
@@ -325,6 +337,7 @@ export async function findContactForCompany(companyId: string): Promise<void> {
         firstName: amf.firstName,
         lastName: amf.lastName,
         title: amf.title,
+        linkedinUrl: amf.linkedinUrl ?? undefined,
         companyId,
         emailStatus: amf.verified ? EmailStatus.VALID : EmailStatus.CATCH_ALL,
         isBuyer: isBuyerTitle(amf.title),
