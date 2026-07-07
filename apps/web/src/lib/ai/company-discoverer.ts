@@ -200,26 +200,22 @@ const QUERY_SET_A = [
   `paid community OR membership site Skool OR Circle OR "Mighty Networks" founder revenue`,
   `course creator Kajabi OR Podia OR Teachable business "failed payments" OR churn`,
   `paid newsletter OR membership business Stripe recurring revenue creator`,
-  // BillClear ICP — self-funded employers, benefits brokers, TPAs
-  `"self-funded" OR "self-insured" employer health plan benefits costs company`,
-  `benefits broker OR "benefits consultant" firm employer health plans clients`,
-  `"third-party administrator" OR TPA health benefits employer clients`,
-  `site:reddit.com r/humanresources "medical bills" OR "billing errors" employee benefits`,
-  // MedScan partnerships — telehealth, pharmacy, senior care
-  `telehealth OR "virtual care" startup medication management patients`,
-  `"senior care" OR "home care" company medication management caregivers`,
-  // MedScan partnerships — corporate wellness/EAP, rehab/PT/urgent-care (broadened)
-  `corporate wellness OR "employee assistance program" provider health tools partnership`,
-  `physical therapy OR rehab clinic OR "urgent care" patients medication management app`,
   // Trust ICP — non-SaaS B2B selling to enterprise (broadened beyond "SaaS")
   `IT managed service provider OR MSP enterprise clients "security review" OR "vendor questionnaire"`,
   `data processing OR data platform company enterprise customers compliance SOC2`,
-  // Growth Service ICP — early-stage B2B, not SaaS-specific (broadened)
-  `early-stage B2B startup no sales team founder outbound struggling`,
-  `bootstrapped B2B startup first customers cold email OR outbound results`,
-  // BillClear ICP — fully-insured / broader employer size (broadened beyond self-funded)
-  `mid-size company "open enrollment" employee health benefits HR team`,
-  `"employee benefits" HR director company health plan cost savings`,
+  // Trust ICP — AI-native wave (2026-07-07: replaced frozen BillClear/MedScan/
+  // GROWTH_SERVICE queries; EU AI Act enforcement 2026-08-02 is the trigger)
+  `"EU AI Act" compliance startup enterprise customers vendor -vanta -drata`,
+  `"ISO 42001" OR "AI governance" B2B startup enterprise customers`,
+  `"AI agent" OR LLM startup enterprise "security questionnaire" OR procurement`,
+  `site:producthunt.com "AI agent" OR copilot B2B enterprise launched`,
+  `vertical AI startup healthcare OR legal OR finance enterprise customers`,
+  `site:news.ycombinator.com "Launch HN" AI B2B enterprise`,
+  // Revenue ICP — bootstrapped/indie SaaS on Stripe ($5K–$100K MRR sweet spot)
+  `site:indiehackers.com SaaS MRR Stripe subscription milestone`,
+  `bootstrapped SaaS "$10k MRR" OR "$20k MRR" OR "$50k MRR" Stripe`,
+  `micro SaaS founder subscription Stripe revenue milestone`,
+  `site:reddit.com r/SaaS "MRR" milestone Stripe billing`,
 ];
 
 const QUERY_SET_B = [
@@ -251,26 +247,21 @@ const QUERY_SET_B = [
   `Skool OR Circle community owner "monthly members" revenue business`,
   `membership site OR "online academy" founder Stripe subscriptions growing`,
   `site:reddit.com r/coursecreators "failed payments" OR Stripe OR churn`,
-  // BillClear ICP — fresh angles
-  `employer "healthcare costs" self-funded plan benefits leader reduce spend`,
-  `"level-funded" OR "self-funded" health plan employer 100 1000 employees`,
-  `site:reddit.com r/benefits "surprise bill" OR "balance billing" employer plan`,
-  `HR tech platform employee benefits marketplace integrations partners`,
-  // MedScan partnerships — fresh angles
-  `pharmacy chain OR "independent pharmacy" patient app medication adherence`,
-  `caregiver platform OR "family caregiving" app medication tracking partnership`,
-  // MedScan partnerships — corporate wellness/EAP, rehab/PT/urgent-care (broadened, fresh angles)
-  `employer wellness program OR EAP vendor partnership health app`,
-  `"urgent care" OR rehab clinic patient medication tracking partnership app`,
   // Trust ICP — non-SaaS B2B selling to enterprise (broadened, fresh angles)
   `fintech OR "data processor" startup enterprise customers "SOC 2" OR "security review"`,
   `IT services company OR managed security provider enterprise clients compliance`,
-  // Growth Service ICP — early-stage B2B, not SaaS-specific (broadened, fresh angles)
-  `founder "our first customers" B2B startup no sales hire outbound`,
-  `site:reddit.com r/startups "cold email" OR "outbound" struggling founder B2B`,
-  // BillClear ICP — fully-insured / broader employer size (broadened, fresh angles)
-  `company employee benefits renewal HR "healthcare costs" 50 500 employees`,
-  `site:reddit.com r/humanresources open enrollment health benefits cost concerns`,
+  // Trust ICP — AI-native wave, fresh angles (2026-07-07: replaced frozen-product queries)
+  `"AI Act" OR "AI regulation" B2B startup enterprise customers compliance`,
+  `"model card" OR "AI transparency" startup enterprise buyers trust`,
+  `AI copilot OR assistant B2B startup "enterprise ready" OR "SOC 2"`,
+  `site:techcrunch.com AI startup enterprise adoption security trust`,
+  `"AI vendor" review OR assessment enterprise procurement startup`,
+  `generative AI startup B2B "series A" enterprise pilot customers`,
+  // Revenue ICP — failed-payment pain, fresh angles
+  `SaaS founder "involuntary churn" OR "failed payments" Stripe fix`,
+  `subscription business "payment retries" OR dunning Stripe founder`,
+  `site:indiehackers.com "failed payments" OR churn Stripe SaaS`,
+  `site:reddit.com r/SaaS pricing upgrade billing Stripe founder`,
 ];
 
 // Pick the query set for this run: alternate daily. Weekly rotation exhausted

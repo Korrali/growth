@@ -86,14 +86,19 @@ export interface FitScoreResult {
   fitReasoning: string;
 }
 
-const SYSTEM_PROMPT = `You are an ICP fit scorer for ${MARKETED_PRODUCT_KEYS.length} products:
+// Only outbound-viable products are scorable — frozen products (BillClear,
+// MedScan, GROWTH_SERVICE) must not attract new fits even though existing
+// Company rows may still carry their fitProduct values.
+const SCORABLE_KEYS = MARKETED_PRODUCT_KEYS.filter((k) => PRODUCTS[k].outboundViable);
 
-${MARKETED_PRODUCT_KEYS.map((k) => {
+const SYSTEM_PROMPT = `You are an ICP fit scorer for ${SCORABLE_KEYS.length} products:
+
+${SCORABLE_KEYS.map((k) => {
   const p = PRODUCTS[k];
   return `**${p.name}** (${k}) — ${p.oneLiner}\n\n${p.icp}`;
 }).join("\n\n---\n\n")}
 
-BOTH: if a company clearly fits both Korrali Trust and Korrali Revenue, use BOTH. (BOTH never refers to BillClear or MedScan.)
+BOTH: if a company clearly fits both Korrali Trust and Korrali Revenue, use BOTH.
 
 A company can only receive one fitProduct — pick the product where the pain is most acute and observable.
 
@@ -104,7 +109,7 @@ Respond with valid JSON only. No prose before or after the JSON.`;
 const OUTPUT_SCHEMA = {
   type: "object" as const,
   properties: {
-    fitProduct: { type: "string", enum: [...MARKETED_PRODUCT_KEYS, "BOTH", "REJECT"] },
+    fitProduct: { type: "string", enum: [...SCORABLE_KEYS, "BOTH", "REJECT"] },
     fitScore: { type: "number", description: "1-10, where 10 = perfect ICP match" },
     painHypothesis: { type: "string", description: "One sentence: the specific pain this company is feeling right now" },
     trigger: { type: "string", description: "The observable signal that makes this the right time to reach out" },
