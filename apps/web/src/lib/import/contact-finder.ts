@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
 import { HIGH_INTENT_MODEL } from "@/lib/ai/models";
 import { enqueueEmailGenerate, enqueueOutreachSend } from "@/lib/queue";
-import type { FitProduct } from "@prisma/client";
+import { EmailStatus, type FitProduct } from "@prisma/client";
 import { PRODUCTS, type MarketedProduct } from "@/lib/products";
 import { pickDeliverableEmail } from "@/lib/import/email-verifier";
 
@@ -35,6 +35,71 @@ function personasForProduct(fitProduct: FitProduct, employeeCount: number | null
   const base = PRODUCTS[key].personas;
   const isSmall = !employeeCount || employeeCount < 50;
   return isSmall ? [...SMALL_CO_PERSONAS, ...base] : base;
+}
+
+// ─── Anymail Finder (optional paid finder — set ANYMAILFINDER_API_KEY) ────────
+// Decision-maker search returns a live-verified email in one call: no name
+// discovery, no pattern guessing, no separate verification, no Tavily credits.
+// Billing is per VERIFIED email only — misses and risky results are free, so
+// falling back to the free Tavily+patterns path on a miss costs nothing.
+
+interface AmfContact {
+  email: string;
+  firstName: string;
+  lastName: string | null;
+  title: string;
+  verified: boolean;
+}
+
+function splitFullName(fullName: string): { firstName: string; lastName: string | null } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: null };
+  if (parts.length === 1) return { firstName: parts[0], lastName: null };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
+
+async function findViaAnymailFinder(company: { name: string; domain: string }): Promise<AmfContact | null> {
+  const apiKey = process.env.ANYMAILFINDER_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch("https://api.anymailfinder.com/v5.1/find-email/decision-maker", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ domain: company.domain, decision_maker_category: ["ceo"] }),
+    });
+    // Not-found (no charge) or any API error → fall back to the free path.
+    if (!res.ok) return null;
+
+    // Field names parsed defensively — AMF nests results differently across
+    // endpoint versions; accept both flat and results-wrapped shapes.
+    const raw = (await res.json()) as Record<string, unknown>;
+    const body = (raw.results ?? raw) as Record<string, unknown>;
+    const email = typeof body.email === "string" ? body.email : null;
+    const status = typeof body.email_status === "string" ? body.email_status : null;
+    if (!email || !email.includes("@") || (status !== "valid" && status !== "risky")) return null;
+
+    const fullName =
+      (typeof body.person_full_name === "string" && body.person_full_name) ||
+      (typeof body.full_name === "string" && body.full_name) ||
+      "";
+    let { firstName, lastName } = splitFullName(fullName);
+    if (!firstName) {
+      // Personalization needs *something*; the mailbox localpart is the best
+      // available guess when AMF returns no name.
+      const local = email.split("@")[0].split(/[._-]/)[0];
+      firstName = local.charAt(0).toUpperCase() + local.slice(1);
+      lastName = null;
+    }
+    const title =
+      (typeof body.person_job_title === "string" && body.person_job_title) ||
+      (typeof body.job_title === "string" && body.job_title) ||
+      "CEO";
+
+    return { email: email.toLowerCase(), firstName, lastName, title, verified: status === "valid" };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Tavily search ────────────────────────────────────────────────────────────
@@ -246,6 +311,45 @@ export async function findContactForCompany(companyId: string): Promise<void> {
   if (existing) {
     // Still try to create outreach if none exists
     await autoEnqueueOutreach(existing.id, companyId, company.fitProduct);
+    return;
+  }
+
+  // Paid finder first when configured: one call, live-verified email, no
+  // Tavily spend. Falls through to the free path on miss (misses cost $0).
+  const amf = await findViaAnymailFinder(company);
+  if (amf) {
+    const amfContact = await prisma.contact.upsert({
+      where: { email: amf.email },
+      create: {
+        email: amf.email,
+        firstName: amf.firstName,
+        lastName: amf.lastName,
+        title: amf.title,
+        companyId,
+        emailStatus: amf.verified ? EmailStatus.VALID : EmailStatus.CATCH_ALL,
+        isBuyer: isBuyerTitle(amf.title),
+      },
+      update: {
+        companyId,
+        emailStatus: amf.verified ? EmailStatus.VALID : EmailStatus.CATCH_ALL,
+      },
+    });
+    await prisma.auditLog.create({
+      data: {
+        actor: "system",
+        action: "contact.found",
+        entity: "Contact",
+        entityId: amfContact.id,
+        metadata: {
+          companyName: company.name,
+          email: amf.email,
+          title: amf.title,
+          source: "anymailfinder",
+          verification: amf.verified ? "deliverable" : "risky",
+        },
+      },
+    });
+    await autoEnqueueOutreach(amfContact.id, companyId, company.fitProduct);
     return;
   }
 
