@@ -126,7 +126,8 @@ ALWAYS REJECT: non-US companies (the product leans on US billing rules like the 
       '"benefits broker"',
       '"benefits consultant"',
     ],
-    outboundViable: true,
+    // 2026-07-07 portfolio freeze: BillClear is maintenance-only; no outbound.
+    outboundViable: false,
     seoCta: "Audit any medical bill in 60 seconds at getbillclear.app",
   },
 
@@ -171,7 +172,8 @@ Pain: no time for outbound, can't afford a $70K SDR, have tried cold email and e
 ALWAYS REJECT: companies with a sales team (AE/SDR job titles visible on LinkedIn), agencies (they either do their own outbound or compete with this exact service), consumer apps, companies that sell outbound/SDR tools themselves.`,
     buyers: "Founders, co-founders of early-stage B2B startups.",
     personas: ['"founder"', '"co-founder"', '"ceo"', '"cto"'],
-    outboundViable: true,
+    // 2026-07-07: DFY SDR service sunset; Growth is internal-only. No outbound.
+    outboundViable: false,
     seoCta: "Book a 15-min demo at korrali.com",
   },
 };
