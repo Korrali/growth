@@ -132,7 +132,7 @@ jobs:
           cd apps/web
           pnpm install --frozen-lockfile
           pnpm exec playwright install chromium --with-deps
-          pnpm exec playwright test \
+          MOCK_AI=true pnpm exec playwright test \
             src/e2e/auth.spec.ts \
             src/e2e/app-routes.spec.ts \
             --project=chromium \

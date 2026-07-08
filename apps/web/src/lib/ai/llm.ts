@@ -14,13 +14,24 @@ export class LLMUnavailableError extends Error {
 
 export interface GenerateTextResult {
   text: string;
+  provider?: string;
+  fallbackUsed?: boolean;
+}
+
+interface GenerateOptions {
+  mock?: boolean;
 }
 
 type AnthropicParams = Anthropic.Messages.MessageCreateParamsNonStreaming;
 
 export async function generateText(
   params: AnthropicParams,
+  options: GenerateOptions = {},
 ): Promise<GenerateTextResult> {
+  if (process.env.MOCK_AI === "true") {
+    return { text: "MOCK_AI_RESPONSE", provider: "anthropic", fallbackUsed: false };
+  }
+
   try {
     const response = await anthropic.messages.create(params);
     const block = response.content.find((b) => b.type === "text");

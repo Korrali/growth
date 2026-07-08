@@ -44,7 +44,7 @@ jobs:
           E2E_BASE_URL: https://growth.korrali.com
           E2E_SESSION_TOKEN: ${{ secrets.E2E_SESSION_TOKEN }}
         run: |
-          pnpm exec playwright test \
+          MOCK_AI=true pnpm exec playwright test \
             --project=chromium \
             --timeout=30000 \
             --reporter=list
