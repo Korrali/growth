@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
-import { HIGH_INTENT_MODEL } from "@/lib/ai/models";
+import { BULK_MODEL } from "@/lib/ai/models";
 import { ReplyCategory } from "@prisma/client";
 import { enqueueContentGenerate } from "@/lib/queue";
 
@@ -32,7 +32,7 @@ export async function generateWeeklyInsights(weekOf: Date): Promise<void> {
   const rawStats = { sends, replies, replyRate, interestedReplies, highFitCompanies: companies, activeTrials: trials };
 
   const response = await anthropic.messages.create({
-    model: HIGH_INTENT_MODEL,
+    model: BULK_MODEL,
     max_tokens: 1024,
     system: `You are analyzing growth metrics for Korrali, a B2B SaaS founder's internal growth platform. Provide a concise weekly summary with actionable recommendations. Respond with JSON only.`,
     messages: [

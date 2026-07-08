@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
-import { HIGH_INTENT_MODEL } from "@/lib/ai/models";
+import { BULK_MODEL } from "@/lib/ai/models";
 import { enqueueFitScore } from "@/lib/queue";
 import { normalizeDomain } from "@/lib/import/csv-parser";
 
@@ -338,7 +338,7 @@ async function extractCompaniesFromResults(
     .join("\n\n---\n\n");
 
   const response = await anthropic.messages.create({
-    model: HIGH_INTENT_MODEL,
+    model: BULK_MODEL,
     max_tokens: 2048,
     system: [
       {

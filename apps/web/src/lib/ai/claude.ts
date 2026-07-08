@@ -11,6 +11,14 @@ function getRealAnthropic() {
   return _anthropic;
 }
 
+// Real OpenAI client — the runtime fallback when the primary provider call
+// (Claude, or Groq for HIGH_INTENT_MODEL-tier features) fails.
+let _openai: OpenAI | null = null;
+function getRealOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "", maxRetries: 3, timeout: 45_000 });
+  return _openai;
+}
+
 // Groq: OpenAI-compatible, free tier 14,400 req/day.
 // TPM: 6,000 for 70B (cheap model), 131,072 for 8B — well within cash-sprint volume.
 let _groq: OpenAI | null = null;
@@ -95,7 +103,52 @@ function mockValueForSchema(schema: any): unknown {
   }
 }
 
-// Anthropic-shaped client backed by Groq.
+// Builds OpenAI-compatible messages from Anthropic-shaped params and calls
+// any OpenAI-compatible client (real OpenAI or Groq), returning an
+// Anthropic-shaped response so callers never know which provider served it.
+async function callOpenAICompatible(
+  client: OpenAI,
+  model: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params: any,
+) {
+  const systemText = flattenSystem(params.system);
+  const msgs: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+  if (systemText) msgs.push({ role: "system", content: systemText });
+
+  for (const msg of (params.messages as Array<{ role: string; content: unknown }>) ?? []) {
+    msgs.push({ role: msg.role as "user" | "assistant", content: flattenContent(msg.content) });
+  }
+
+  const needsJson = !!(params.output_config as { format?: unknown } | undefined)?.format;
+
+  const completion = await client.chat.completions.create({
+    model,
+    max_tokens: (params.max_tokens as number) ?? 1024,
+    messages: msgs,
+    temperature: params.temperature as number | undefined,
+    ...(needsJson ? { response_format: { type: "json_object" as const } } : {}),
+  });
+
+  const text = completion.choices[0]?.message?.content ?? "";
+  return {
+    content: [{ type: "text" as const, text }],
+    usage: {
+      input_tokens: completion.usage?.prompt_tokens ?? 0,
+      output_tokens: completion.usage?.completion_tokens ?? 0,
+    },
+    model: completion.model,
+    stop_reason: "end_turn" as const,
+  };
+}
+
+// Anthropic-shaped client. Every feature in this codebase calls
+// anthropic.messages.create() directly (no shared generateText() wrapper),
+// so this is the single place resilience needs to live for all of them.
+//
+// claude-* models: Claude (primary) -> OpenAI gpt-4o-mini -> Groq (final).
+// Non-claude models (e.g. HIGH_INTENT_MODEL-tier features not yet migrated
+// to Claude): Groq (primary, unchanged) -> OpenAI gpt-4o-mini (fallback).
 export const anthropic = {
   messages: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,47 +165,38 @@ export const anthropic = {
         };
       }
 
-      // claude-* models go to the real Anthropic API when a key exists.
-      // Params pass through untouched — callers already use the Anthropic
-      // shape (system blocks with cache_control, output_config.format).
-      // Without a key (local dev), toGroqModel() below maps claude-* names
-      // to a Groq model, preserving the free fallback.
-      if (
-        process.env.ANTHROPIC_API_KEY &&
+      const wantsClaude =
+        !!process.env.ANTHROPIC_API_KEY &&
         typeof params.model === "string" &&
-        params.model.startsWith("claude")
-      ) {
-        return getRealAnthropic().messages.create(params);
+        params.model.startsWith("claude");
+
+      if (wantsClaude) {
+        try {
+          return await getRealAnthropic().messages.create(params);
+        } catch (err) {
+          console.warn("[ai] Anthropic call failed, falling back to OpenAI:", err instanceof Error ? err.message : err);
+          try {
+            if (!process.env.OPENAI_API_KEY) throw new Error("No OPENAI_API_KEY configured");
+            return await callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params);
+          } catch (openaiErr) {
+            console.warn("[ai] OpenAI fallback failed, falling back to Groq:", openaiErr instanceof Error ? openaiErr.message : openaiErr);
+            return await callOpenAICompatible(getGroq(), toGroqModel(params.model as string), params);
+          }
+        }
       }
 
-      const systemText = flattenSystem(params.system);
-      const msgs: OpenAI.Chat.ChatCompletionMessageParam[] = [];
-      if (systemText) msgs.push({ role: "system", content: systemText });
-
-      for (const msg of (params.messages as Array<{ role: string; content: unknown }>) ?? []) {
-        msgs.push({ role: msg.role as "user" | "assistant", content: flattenContent(msg.content) });
+      // Primary here is Groq (non-claude model string, e.g. HIGH_INTENT_MODEL).
+      try {
+        return await callOpenAICompatible(
+          getGroq(),
+          toGroqModel((params.model as string) ?? CLAUDE_MODELS.default),
+          params,
+        );
+      } catch (err) {
+        console.warn("[ai] Groq call failed, falling back to OpenAI:", err instanceof Error ? err.message : err);
+        if (!process.env.OPENAI_API_KEY) throw err;
+        return await callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params);
       }
-
-      const needsJson = !!(params.output_config as { format?: unknown } | undefined)?.format;
-
-      const completion = await getGroq().chat.completions.create({
-        model: toGroqModel((params.model as string) ?? CLAUDE_MODELS.default),
-        max_tokens: (params.max_tokens as number) ?? 1024,
-        messages: msgs,
-        temperature: params.temperature as number | undefined,
-        ...(needsJson ? { response_format: { type: "json_object" as const } } : {}),
-      });
-
-      const text = completion.choices[0]?.message?.content ?? "";
-      return {
-        content: [{ type: "text" as const, text }],
-        usage: {
-          input_tokens: completion.usage?.prompt_tokens ?? 0,
-          output_tokens: completion.usage?.completion_tokens ?? 0,
-        },
-        model: completion.model,
-        stop_reason: "end_turn" as const,
-      };
     },
   },
 };
