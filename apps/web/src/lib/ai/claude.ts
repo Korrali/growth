@@ -56,11 +56,62 @@ function flattenContent(content: unknown): string {
   return String(content ?? "");
 }
 
+// Builds a minimal, schema-valid stand-in for MOCK_AI mode. Every feature
+// (fit-scorer, email-generator, reply-classifier, etc.) calls anthropic.messages.create()
+// directly rather than through a shared generateText() wrapper, so this is the
+// one place that needs to short-circuit real API calls for all of them.
+// Prefers "safe" enum values (REJECT/NONE/OTHER/unknown) so mocked scores never
+// cross real thresholds (e.g. auto-triggering contact discovery or auto-send).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mockValueForSchema(schema: any): unknown {
+  if (!schema) return null;
+  if (Array.isArray(schema.type)) {
+    const nonNull = schema.type.find((t: string) => t !== "null") ?? schema.type[0];
+    return mockValueForSchema({ ...schema, type: nonNull });
+  }
+  if (Array.isArray(schema.enum)) {
+    const safe = schema.enum.find((v: unknown) => /^(reject|none|other|unknown)$/i.test(String(v)));
+    return safe ?? schema.enum[0];
+  }
+  switch (schema.type) {
+    case "object": {
+      const obj: Record<string, unknown> = {};
+      const keys = schema.required ?? Object.keys(schema.properties ?? {});
+      for (const key of keys) obj[key] = mockValueForSchema(schema.properties?.[key]);
+      return obj;
+    }
+    case "array":
+      // A representative single item, not [] — some callers (e.g. email-generator's
+      // "steps") throw on an empty array.
+      return schema.items ? [mockValueForSchema(schema.items)] : [];
+    case "string":
+      return "MOCK_AI_RESPONSE";
+    case "number":
+      return 1;
+    case "boolean":
+      return false;
+    default:
+      return null;
+  }
+}
+
 // Anthropic-shaped client backed by Groq.
 export const anthropic = {
   messages: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async create(params: any) {
+      if (process.env.MOCK_AI === "true") {
+        const schema = (params.output_config as { format?: { schema?: unknown } } | undefined)
+          ?.format?.schema;
+        const text = schema ? JSON.stringify(mockValueForSchema(schema)) : "MOCK_AI_RESPONSE";
+        return {
+          content: [{ type: "text" as const, text }],
+          usage: { input_tokens: 0, output_tokens: 0 },
+          model: params.model,
+          stop_reason: "end_turn" as const,
+        };
+      }
+
       // claude-* models go to the real Anthropic API when a key exists.
       // Params pass through untouched — callers already use the Anthropic
       // shape (system blocks with cache_control, output_config.format).
