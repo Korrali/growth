@@ -12,11 +12,14 @@ export interface RedditPost {
   title: string;
   selftext: string;
   url: string;
+  permalink: string;
   author: string;
   score: number;
   num_comments: number;
   created_utc: number;
 }
+
+export type RedditTimeWindow = "hour" | "day" | "week" | "month" | "year" | "all";
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
@@ -48,13 +51,14 @@ export async function searchSubreddit(
   keyword: string,
   after?: string | null,
   limit = 25,
+  time: RedditTimeWindow = "week",
 ): Promise<{ posts: RedditPost[]; nextCursor: string | null }> {
   const token = await getAccessToken();
   const params = new URLSearchParams({
     q: keyword,
     sort: "new",
     limit: String(limit),
-    t: "week",
+    t: time,
     restrict_sr: "true",
     ...(after ? { after } : {}),
   });

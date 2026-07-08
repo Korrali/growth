@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/db";
 import { scoreCommunityMention } from "@/lib/ai/community-intent-scorer";
+import { searchSubreddit } from "@/lib/reddit/client";
 import { CommunitySource } from "@prisma/client";
 
 // ─── Scan targets ────────────────────────────────────────────────────────────
-// Reddit: native Reddit JSON API — free, no key, 10 req/min unauthenticated.
+// Reddit: OAuth-authenticated via lib/reddit/client (REDDIT_CLIENT_ID/SECRET) —
+//         unauthenticated requests from datacenter IPs (EC2) get blocked by
+//         Reddit's anti-bot layer instead of returning JSON.
 // HN:     Algolia API — free, no key, no rate limit.
 // IH:     Tavily site: queries — only 4 targets × 3 runs/week ≈ 48 calls/month,
 //         keeping Tavily well within the free 1,000/month shared with company
@@ -53,9 +56,9 @@ const HN_QUERIES = [
   "stripe billing subscription dunning",
 ];
 
-// ─── Reddit native API ────────────────────────────────────────────────────────
-// Free, no key required. Rate limit: 10 req/min unauthenticated — well within
-// our 3×/week schedule (10 subreddit searches per run).
+// ─── Reddit search (OAuth via lib/reddit/client) ─────────────────────────────
+// t=month to match this feature's original recency window (the client's own
+// default is t=week).
 
 interface RedditPost {
   id: string;
@@ -67,26 +70,15 @@ interface RedditPost {
 }
 
 async function redditSearch(subreddit: string, query: string): Promise<RedditPost[]> {
-  const url =
-    `https://www.reddit.com/r/${subreddit}/search.json` +
-    `?q=${encodeURIComponent(query)}&restrict_sr=on&sort=new&t=month&limit=10`;
-
-  const res = await fetch(url, {
-    headers: { "User-Agent": "korrali-growth-scanner/1.0" },
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Reddit API error ${res.status}: ${body}`);
-  }
-
-  const data = (await res.json()) as {
-    data?: { children?: Array<{ data?: RedditPost }> };
-  };
-
-  return (data.data?.children ?? [])
-    .map((c) => c.data)
-    .filter((p): p is RedditPost => Boolean(p?.id));
+  const { posts } = await searchSubreddit(subreddit, query, null, 10, "month");
+  return posts.map((p) => ({
+    id: p.id,
+    title: p.title,
+    selftext: p.selftext,
+    url: p.url,
+    permalink: p.permalink,
+    author: p.author,
+  }));
 }
 
 // ─── Tavily helper (IH only) ──────────────────────────────────────────────────

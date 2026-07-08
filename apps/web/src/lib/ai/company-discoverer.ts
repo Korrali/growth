@@ -3,6 +3,7 @@ import { anthropic } from "@/lib/ai/claude";
 import { BULK_MODEL } from "@/lib/ai/models";
 import { enqueueFitScore } from "@/lib/queue";
 import { normalizeDomain } from "@/lib/import/csv-parser";
+import { searchSubreddit } from "@/lib/reddit/client";
 
 // ─── Search provider (Tavily default, Brave fallback) ────────────────────────
 // Tavily: free 1,000 searches/month, no card needed — tavily.com/api
@@ -56,8 +57,10 @@ async function tavilySearch(query: string, maxResults = 10): Promise<SearchResul
 }
 
 async function webSearch(query: string, count = 10): Promise<SearchResult[]> {
-  // Reddit queries go through Reddit JSON API (free, no key needed) — saves Tavily quota.
-  // Reddit 403s datacenter IPs (EC2), so fall through to Tavily on any failure.
+  // Reddit queries go through the OAuth-authenticated Reddit client (saves Tavily
+  // quota). Reddit's anti-bot layer blocks unauthenticated requests from datacenter
+  // IPs (EC2) with a challenge page instead of JSON — OAuth avoids that. Still fall
+  // through to Tavily on any failure (rate limit, missing credentials, etc).
   const redditMatch = query.match(/site:reddit\.com\s+r\/(\w+)\s+(.*)/);
   if (redditMatch) {
     try {
@@ -94,44 +97,18 @@ async function webSearch(query: string, count = 10): Promise<SearchResult[]> {
   }));
 }
 
-// ─── Reddit JSON API (free, no auth) ─────────────────────────────────────────
-// Reddit exposes /r/{sub}/search.json — no key, just a User-Agent header.
+// ─── Reddit search (OAuth via lib/reddit/client) ──────────────────────────────
 // We use this for all site:reddit.com queries so Tavily quota stays for web results.
+// t=month (vs the client's t=week default) to match this feature's original
+// recency window.
 
 async function redditSearch(subreddit: string, query: string, limit = 10): Promise<SearchResult[]> {
-  const params = new URLSearchParams({
-    q: query,
-    restrict_sr: "on",
-    sort: "new",
-    t: "month",
-    limit: String(Math.min(limit, 25)),
-    raw_json: "1",
-  });
-  const url = `https://www.reddit.com/r/${subreddit}/search.json?${params}`;
+  const { posts } = await searchSubreddit(subreddit, query, null, Math.min(limit, 25), "month");
 
-  const res = await fetch(url, {
-    headers: { "User-Agent": "KorraliGrowth/1.0 (company discovery)" },
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Reddit search error ${res.status}: ${body}`);
-  }
-
-  const data = (await res.json()) as {
-    data?: {
-      children?: Array<{
-        data?: { title?: string; url?: string; selftext?: string; permalink?: string };
-      }>;
-    };
-  };
-
-  return (data.data?.children ?? []).map((c) => ({
-    title: c.data?.title ?? "",
-    url: c.data?.url && !c.data.url.startsWith("/r/")
-      ? c.data.url
-      : `https://reddit.com${c.data?.permalink ?? ""}`,
-    description: (c.data?.selftext ?? "").slice(0, 400),
+  return posts.map((p) => ({
+    title: p.title,
+    url: p.url && !p.url.startsWith("/r/") ? p.url : `https://reddit.com${p.permalink ?? ""}`,
+    description: (p.selftext ?? "").slice(0, 400),
   }));
 }
 
