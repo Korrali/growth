@@ -1,4 +1,15 @@
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+
+// Real Anthropic client — used for claude-* models when ANTHROPIC_API_KEY is
+// set. Unlike Groq's json_object mode (no schema enforcement — the source of
+// invalid-enum fit scores and reasoning/score contradictions), the Anthropic
+// API hard-enforces output_config json_schema.
+let _anthropic: Anthropic | null = null;
+function getRealAnthropic() {
+  if (!_anthropic) _anthropic = new Anthropic({ maxRetries: 3, timeout: 60_000 });
+  return _anthropic;
+}
 
 // Groq: OpenAI-compatible, free tier 14,400 req/day.
 // TPM: 6,000 for 70B (cheap model), 131,072 for 8B — well within cash-sprint volume.
@@ -50,6 +61,19 @@ export const anthropic = {
   messages: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async create(params: any) {
+      // claude-* models go to the real Anthropic API when a key exists.
+      // Params pass through untouched — callers already use the Anthropic
+      // shape (system blocks with cache_control, output_config.format).
+      // Without a key (local dev), toGroqModel() below maps claude-* names
+      // to a Groq model, preserving the free fallback.
+      if (
+        process.env.ANTHROPIC_API_KEY &&
+        typeof params.model === "string" &&
+        params.model.startsWith("claude")
+      ) {
+        return getRealAnthropic().messages.create(params);
+      }
+
       const systemText = flattenSystem(params.system);
       const msgs: OpenAI.Chat.ChatCompletionMessageParam[] = [];
       if (systemText) msgs.push({ role: "system", content: systemText });
