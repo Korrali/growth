@@ -208,6 +208,15 @@ async function sendAlert(subject: string, body: string): Promise<void> {
 }
 
 async function runRedditNativeScan(): Promise<void> {
+  // No Reddit API credentials available (and none are coming) — skip cleanly
+  // instead of failing all REDDIT_TARGETS every run and eventually firing an
+  // unactionable "3 consecutive failures" alert. Re-enable automatically if
+  // credentials are ever added.
+  if (!process.env.REDDIT_CLIENT_ID || !process.env.REDDIT_CLIENT_SECRET) {
+    console.log("[community-scanner] skipping Reddit — REDDIT_CLIENT_ID/SECRET not set");
+    return;
+  }
+
   const newlyBroken: { subreddit: string; keyword: string; error: string }[] = [];
 
   for (const { subreddit, keyword } of REDDIT_TARGETS) {
