@@ -18,6 +18,21 @@ function slugify(title: string): string {
 export async function generateSeoArticle(topic: SeoTopic): Promise<string> {
   const ctx = PRODUCTS[topic.product];
 
+  // Korrali Trust is a WORKFLOW tool, not a compliance/certification authority.
+  // These articles auto-publish with no human review, so the positioning
+  // doctrine has to live in the prompt — never let AI copy claim the product
+  // makes anyone "compliant" or "certified".
+  const positioningGuard =
+    topic.product === "TRUST"
+      ? `
+
+CRITICAL positioning rules (Korrali Trust is a workflow tool, NOT a compliance or certification authority):
+- NEVER claim the product makes anyone "compliant", "certified", "audit-ready", or that it guarantees/ensures compliance or passing an audit.
+- NEVER position it as a substitute for an auditor, legal advice, or an official certification body.
+- Use operational/workflow language only: "answer security questionnaires faster", "draft responses from your knowledge base", "map where you'd get stuck", "organise evidence", "prepare for a review".
+- Educational explanation of SOC 2 / GDPR / etc. is fine; claiming THIS PRODUCT delivers compliance or certification is NOT.`
+      : "";
+
   const response = await anthropic.messages.create({
     model: WRITING_MODEL,
     max_tokens: 4096,
@@ -28,7 +43,7 @@ export async function generateSeoArticle(topic: SeoTopic): Promise<string> {
 - Structure: intro (problem), body (3-4 H2 sections with practical depth), conclusion + CTA
 - Format in clean Markdown (H1, H2, H3 only — no bold emphasis spam)
 - End with one soft CTA mentioning the product naturally, not as an ad
-- Never mention competitor brand names`,
+- Never mention competitor brand names${positioningGuard}`,
     messages: [
       {
         role: "user",

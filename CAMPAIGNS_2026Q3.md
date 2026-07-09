@@ -12,7 +12,7 @@ Two internal campaigns (no client, founder inbox). Values below map 1:1 to the c
 - dailyLimit: `10` (warming; raise per runbook schedule)
 - perDomainLimit: `1` · sendWindow: `8–18` · timezone: `America/New_York`
 - maxFollowUps: `3` · testMode: `true` · client: none
-- fromName: `Ashish from Korrali` · fromEmail: `ashish@outreach.korrali.com` (after domain verifies — NOT the root-domain address)
+- fromName: `Ashish from Korrali` · fromEmail: `ashish@getkorrali.com` (the verified cold-outbound domain — NOT the root korrali.com address; `outreach.korrali.com` was shelved, see DELIVERABILITY_RUNBOOK.md)
 
 **customIcpProfile** (paste verbatim):
 ```

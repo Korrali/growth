@@ -142,6 +142,61 @@ async function callOpenAICompatible(
   };
 }
 
+// ── Provider circuit breaker ────────────────────────────────────────────────
+// A billing lapse or exhausted quota makes a provider fail EVERY call, not one.
+// Without a breaker the shim re-hammers the dead provider on every job — on
+// 2026-07-09 fit.score failed 685× against an empty Anthropic wallet with no
+// alert and a silently starved funnel. This tracks per-provider health: on a
+// failure we open the breaker for a cooldown so later calls skip straight to a
+// working fallback, and we emit ONE loud, greppable alert per outage window
+// (grep `[ai][PROVIDER_DOWN]` in the pm2 error log) instead of a silent flood.
+type ProviderName = "anthropic" | "openai" | "groq";
+const HARD_COOLDOWN_MS = 15 * 60_000; // billing/auth — persistent until a human acts
+const SOFT_COOLDOWN_MS = 5 * 60_000; // rate limit / transient
+const breaker: Record<ProviderName, { downUntil: number; alertedAt: number }> = {
+  anthropic: { downUntil: 0, alertedAt: 0 },
+  openai: { downUntil: 0, alertedAt: 0 },
+  groq: { downUntil: 0, alertedAt: 0 },
+};
+
+function errMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  try { return JSON.stringify(err); } catch { return String(err); }
+}
+
+// Hard = the provider will keep failing until a human acts (billing/auth/quota),
+// so we back off long and shout. Everything else is treated as transient.
+function isHardProviderError(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  if (status === 401 || status === 403) return true;
+  return /credit balance|billing|insufficient|quota|unauthorized|invalid.*api.*key|permission/i.test(errMessage(err));
+}
+
+function markProviderDown(name: ProviderName, err: unknown): void {
+  const now = Date.now();
+  const hard = isHardProviderError(err);
+  const cooldown = hard ? HARD_COOLDOWN_MS : SOFT_COOLDOWN_MS;
+  breaker[name].downUntil = now + cooldown;
+  // One alert per outage window per provider — loud + greppable for monitoring.
+  if (now - breaker[name].alertedAt > cooldown) {
+    breaker[name].alertedAt = now;
+    console.error(
+      `[ai][PROVIDER_DOWN] ${name} ${hard ? "HARD (billing/auth/quota — needs a human)" : "soft (transient)"}: ${errMessage(err)}`,
+    );
+  }
+}
+
+function providerAvailable(name: ProviderName): boolean {
+  return Date.now() >= breaker[name].downUntil;
+}
+
+function markProviderUp(name: ProviderName): void {
+  if (breaker[name].downUntil !== 0) {
+    console.error(`[ai][PROVIDER_RECOVERED] ${name} is serving again`);
+    breaker[name] = { downUntil: 0, alertedAt: 0 };
+  }
+}
+
 // Anthropic-shaped client. Every feature in this codebase calls
 // anthropic.messages.create() directly (no shared generateText() wrapper),
 // so this is the single place resilience needs to live for all of them.
@@ -149,6 +204,7 @@ async function callOpenAICompatible(
 // claude-* models: Claude (primary) -> OpenAI gpt-4o-mini -> Groq (final).
 // Non-claude models (e.g. HIGH_INTENT_MODEL-tier features not yet migrated
 // to Claude): Groq (primary, unchanged) -> OpenAI gpt-4o-mini (fallback).
+// A provider whose breaker is open is skipped for its cooldown window.
 export const anthropic = {
   messages: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -165,38 +221,63 @@ export const anthropic = {
         };
       }
 
+      const hasOpenAI = !!process.env.OPENAI_API_KEY;
       const wantsClaude =
         !!process.env.ANTHROPIC_API_KEY &&
         typeof params.model === "string" &&
         params.model.startsWith("claude");
 
-      if (wantsClaude) {
+      // Ordered provider attempts for this call. claude-* → Anthropic first;
+      // everything else → Groq first. OpenAI is only in the chain when keyed.
+      // Order is preserved from the original chain (see claude-fallback.test.ts).
+      // No return-type annotation on `run`: let TS infer the same response union
+      // the original inline returns produced, so callers keep their `.content` types.
+      const attempts = wantsClaude
+        ? [
+            { name: "anthropic" as const, run: () => getRealAnthropic().messages.create(params) },
+            ...(hasOpenAI
+              ? [{ name: "openai" as const, run: () => callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params) }]
+              : []),
+            { name: "groq" as const, run: () => callOpenAICompatible(getGroq(), toGroqModel(params.model as string), params) },
+          ]
+        : [
+            { name: "groq" as const, run: () => callOpenAICompatible(getGroq(), toGroqModel((params.model as string) ?? CLAUDE_MODELS.default), params) },
+            ...(hasOpenAI
+              ? [{ name: "openai" as const, run: () => callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params) }]
+              : []),
+          ];
+
+      let lastErr: unknown = new Error("no AI provider configured");
+      let anyAttempted = false;
+      for (const attempt of attempts) {
+        if (!providerAvailable(attempt.name)) continue; // breaker open — skip fast
+        anyAttempted = true;
         try {
-          return await getRealAnthropic().messages.create(params);
+          const res = await attempt.run();
+          markProviderUp(attempt.name);
+          return res;
         } catch (err) {
-          console.warn("[ai] Anthropic call failed, falling back to OpenAI:", err instanceof Error ? err.message : err);
-          try {
-            if (!process.env.OPENAI_API_KEY) throw new Error("No OPENAI_API_KEY configured");
-            return await callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params);
-          } catch (openaiErr) {
-            console.warn("[ai] OpenAI fallback failed, falling back to Groq:", openaiErr instanceof Error ? openaiErr.message : openaiErr);
-            return await callOpenAICompatible(getGroq(), toGroqModel(params.model as string), params);
-          }
+          lastErr = err;
+          markProviderDown(attempt.name, err);
+          console.warn(`[ai] ${attempt.name} call failed, trying next fallback:`, errMessage(err));
         }
       }
 
-      // Primary here is Groq (non-claude model string, e.g. HIGH_INTENT_MODEL).
-      try {
-        return await callOpenAICompatible(
-          getGroq(),
-          toGroqModel((params.model as string) ?? CLAUDE_MODELS.default),
-          params,
-        );
-      } catch (err) {
-        console.warn("[ai] Groq call failed, falling back to OpenAI:", err instanceof Error ? err.message : err);
-        if (!process.env.OPENAI_API_KEY) throw err;
-        return await callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params);
+      // Everything was skipped by an open breaker. Don't fail blind on a stale
+      // cooldown guess — try the last (most-likely-up) provider once anyway.
+      if (!anyAttempted && attempts.length > 0) {
+        const last = attempts[attempts.length - 1];
+        try {
+          const res = await last.run();
+          markProviderUp(last.name);
+          return res;
+        } catch (err) {
+          lastErr = err;
+          markProviderDown(last.name, err);
+        }
       }
+
+      throw new Error(`[ai][ALL_PROVIDERS_DOWN] every provider failed or is cooling down. Last error: ${errMessage(lastErr)}`);
     },
   },
 };

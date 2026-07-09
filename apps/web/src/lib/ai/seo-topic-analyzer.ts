@@ -36,7 +36,10 @@ export async function analyzeSeoTopics(): Promise<SeoTopic[]> {
 
   const response = await anthropic.messages.create({
     model: BULK_MODEL,
-    max_tokens: 2048,
+    // 8-14 topics × 7 fields (incl. a 150-160 char meta description) overruns
+    // 2048 tokens and truncates the JSON array → parse fails → silent []. Give
+    // it real headroom.
+    max_tokens: 4096,
     system: `You are an SEO strategist for ${MARKETED_PRODUCT_KEYS.length} products:
 
 ${MARKETED_PRODUCT_KEYS.map((k) => `**${PRODUCTS[k].name}** (${k}) — ${PRODUCTS[k].oneLiner} Buyers: ${PRODUCTS[k].buyers}`).join("\n\n")}
@@ -51,16 +54,32 @@ Return a JSON array of topics. Deduplicate aggressively — 8-14 topics maximum.
     messages: [{ role: "user", content: userContent }],
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stopReason = (response as any).stop_reason;
   const block = response.content.find((b) => b.type === "text");
-  if (!block || block.type !== "text") return [];
+  if (!block || block.type !== "text") {
+    console.warn(`[seo-topics] no text block in AI response (stop_reason=${stopReason}) — returning 0 topics`);
+    return [];
+  }
 
+  const text = block.text.trim();
   try {
-    const text = block.text.trim();
     const jsonStart = text.indexOf("[");
     const jsonEnd = text.lastIndexOf("]") + 1;
     const parsed = JSON.parse(text.slice(jsonStart, jsonEnd)) as SeoTopic[];
-    return parsed.filter((t) => MARKETED_PRODUCT_KEYS.includes(t.product));
-  } catch {
+    const kept = parsed.filter((t) => MARKETED_PRODUCT_KEYS.includes(t.product));
+    // Never fail silently again — a 0-topic result is why the content pipeline
+    // sat dead and invisible for days (2026-07-09).
+    if (kept.length === 0) {
+      console.warn(
+        `[seo-topics] parsed ${parsed.length} topics but 0 matched product keys (${PRODUCT_KEY_LIST}); first product seen=${JSON.stringify(parsed[0]?.product)}`,
+      );
+    }
+    return kept;
+  } catch (err) {
+    console.warn(
+      `[seo-topics] JSON parse failed (stop_reason=${stopReason}, text_len=${text.length}): ${err instanceof Error ? err.message : err}`,
+    );
     return [];
   }
 }

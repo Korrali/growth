@@ -85,4 +85,22 @@ describe("Growth claude.ts fallback chain", () => {
     expect(openaiCreate).toHaveBeenCalledTimes(2);
     expect(openaiCreate.mock.calls[1][1].model).toBe("gpt-4o-mini");
   });
+
+  it("opens the circuit breaker on a hard billing error and skips the dead provider on the next call", async () => {
+    // Anthropic is out of credits — a persistent failure that would otherwise be
+    // re-hammered on every job (fit.score failed 685× this way on 2026-07-09).
+    anthropicCreate.mockRejectedValue(new Error("Your credit balance is too low to access the Anthropic API"));
+    openaiCreate.mockResolvedValue({ choices: [{ message: { content: "from-openai" } }], usage: {}, model: "gpt-4o-mini" });
+    const { anthropic } = await import("../claude");
+
+    const res1 = await anthropic.messages.create({ model: "claude-haiku-4-5", messages: [{ role: "user", content: "one" }] });
+    const res2 = await anthropic.messages.create({ model: "claude-haiku-4-5", messages: [{ role: "user", content: "two" }] });
+
+    // Both calls succeed via the OpenAI fallback...
+    expect((res1.content[0] as { text: string }).text).toBe("from-openai");
+    expect((res2.content[0] as { text: string }).text).toBe("from-openai");
+    // ...but Anthropic was only hit ONCE — the breaker skipped it the second time.
+    expect(anthropicCreate).toHaveBeenCalledTimes(1);
+    expect(openaiCreate).toHaveBeenCalledTimes(2);
+  });
 });
