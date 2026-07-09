@@ -4,6 +4,7 @@ import { BULK_MODEL } from "@/lib/ai/models";
 import { FitProduct } from "@prisma/client";
 import { enqueueFitScore, enqueueContactFind } from "@/lib/queue";
 import { PRODUCTS, MARKETED_PRODUCT_KEYS } from "@/lib/products";
+import { getDomainSuppressionReason } from "@/lib/sending/suppression";
 
 // ─── Landing page analysis ────────────────────────────────────────────────────
 
@@ -125,6 +126,49 @@ const OUTPUT_SCHEMA = {
 
 export async function scoreFitForCompany(companyId: string): Promise<FitScoreResult> {
   const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+
+  // Hard, deterministic gate: skip the LLM call entirely for domains we
+  // already know are suppressed (competitors, manual blocks, etc). The
+  // fit-scorer is a cheap/bulk model asked to apply a long named-competitor
+  // list from a prompt, and it doesn't reliably catch it — MoonClerk was
+  // named verbatim in the Revenue ICP reject list (products.ts) and still
+  // scored 7/REVENUE on 2026-07-07. That only didn't reach an inbox because
+  // send-eligibility's domain-suppression check (a separate, later gate)
+  // caught it — this check makes the same suppression list authoritative
+  // up front, before any scoring or contact-discovery spend.
+  const suppressionReason = company.domain
+    ? await getDomainSuppressionReason(company.domain)
+    : null;
+  if (suppressionReason) {
+    const result: FitScoreResult = {
+      fitProduct: FitProduct.REJECT,
+      fitScore: 1,
+      painHypothesis: "",
+      trigger: "",
+      personalizedObservation: "",
+      recommendedCta: "",
+      fitReasoning: `[auto-REJECT: domain suppressed, reason=${suppressionReason}]`,
+    };
+    await prisma.scoringRun.create({
+      data: {
+        companyId,
+        model: BULK_MODEL,
+        inputData: { domain: company.domain, suppressionReason },
+        outputData: JSON.parse(JSON.stringify(result)),
+        durationMs: 0,
+      },
+    });
+    await prisma.company.update({
+      where: { id: companyId },
+      data: {
+        fitProduct: result.fitProduct,
+        fitScore: result.fitScore,
+        fitReasoning: result.fitReasoning,
+        fitScoredAt: new Date(),
+      },
+    });
+    return result;
+  }
 
   const startedAt = Date.now();
   const inputData = {

@@ -24,6 +24,16 @@ export async function isDomainSuppressed(domain: string): Promise<boolean> {
   return row !== null;
 }
 
+export async function getDomainSuppressionReason(
+  domain: string,
+): Promise<SuppressionReason | null> {
+  const row = await prisma.suppression.findFirst({
+    where: { type: SuppressionType.DOMAIN, value: domain.toLowerCase() },
+    select: { reason: true },
+  });
+  return row?.reason ?? null;
+}
+
 export async function addEmailSuppression(
   email: string,
   reason: SuppressionReason,

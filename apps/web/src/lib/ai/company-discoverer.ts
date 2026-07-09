@@ -196,11 +196,13 @@ const QUERY_SET_A = [
   `site:producthunt.com "AI agent" OR copilot B2B enterprise launched`,
   `vertical AI startup healthcare OR legal OR finance enterprise customers`,
   `site:news.ycombinator.com "Launch HN" AI B2B enterprise`,
-  // Revenue ICP — bootstrapped/indie SaaS on Stripe ($5K–$100K MRR sweet spot)
-  `site:indiehackers.com SaaS MRR Stripe subscription milestone`,
-  `bootstrapped SaaS "$10k MRR" OR "$20k MRR" OR "$50k MRR" Stripe`,
-  `micro SaaS founder subscription Stripe revenue milestone`,
-  `site:reddit.com r/SaaS "MRR" milestone Stripe billing`,
+  // Revenue ICP — scaling SaaS on Stripe ($50–150K MRR core band, corrected
+  // 2026-07-09: was indie/bootstrapped $5–100K — too small, sub-$30K accounts
+  // net only tens of $/mo on 10% performance pricing and can't be upsold to flat)
+  `site:indiehackers.com SaaS "$50k MRR" OR "$100k MRR" OR "$150k MRR" Stripe`,
+  `scaling SaaS "$50k MRR" OR "$100k MRR" Series A OR Series B Stripe subscription`,
+  `mid-market B2B SaaS Stripe subscription billing "revenue operations" scaling`,
+  `site:reddit.com r/SaaS "MRR" Series A OR "scaling" Stripe billing failed payments`,
 ];
 
 const QUERY_SET_B = [
