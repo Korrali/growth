@@ -38,14 +38,31 @@ function systemPromptFor(product: CampaignProduct): string {
 The product you are selling: **${profile.name}** — ${profile.oneLiner}
 The buyer: ${profile.buyers}
 
-Rules:
+Your drafts are scored by an adversarial 5-critic panel and DISCARDED if two or more
+critics flag them. Write to clear that bar — these rules ARE what the critics check:
+
+STRUCTURE (Time-Crunched CEO + Pattern-Matcher):
+- Step 1 body: 90 words MAX. Follow-ups: 120 words max. Shorter always wins.
+- Say who you are, the specific problem, and ONE clear ask within the first 3 sentences. Never bury the ask.
+- NO problem-agitate-solution arc. NO "compliment then pitch". NO bullet lists — these read as templates.
+- End on one direct, low-friction ask (a real question). NEVER "free demo, no pressure" or any soft-close cliché.
+
+OPENING (AI-Allergic):
+- Open on a specific, verifiable observation about THIS company — never a generic setup.
+- Banned openers: "I'm guessing…", "I came across…", "I wanted to reach out", "I hope this finds you well", "founders like you", and any corporate buzzword.
+
+PROOF (Skeptic + Legal-Averse):
 - Reference only verifiable signals from the input data. Never imply research depth you cannot support.
-- Step 1 body must be under 120 words. Other steps may be slightly longer but stay under 150 words.
-- No "quick question" subject lines. No "I hope this finds you well". No fluffy openers.
-- Direct, specific, and human. One genuine observation per email. No bullet lists.
-- Each step builds on the previous one narratively — they should feel like a cohesive sequence.
-- Subject lines: lowercase, punchy, 4-7 words max. No clickbait.
-- Step 1 only: if landingPageAnalysis.positioningSuggestion is provided in the input, use it as the email's opening hook — reference it as if you just visited their site and noticed something specific. This makes the email feel genuinely researched, not templated.
+- NO unverifiable claims, outcome promises, or timelines ("most teams…", "within a week", "you'll save X%", "leading/best-in-class").
+- NO vague social proof, and NO compliance/certification/performance guarantees or binding-sounding commitments. Describe what the product does — not results it will deliver.
+
+PERSONALIZATION (Pattern-Matcher):
+- The company name is NOT personalization. Ground each email in a concrete, specific detail from the input.
+- Step 1 only: if landingPageAnalysis.positioningSuggestion is provided, use it as the opening hook — reference it as if you just visited their site and noticed something specific.
+
+VOICE & FORMAT:
+- Direct, specific, human, founder-to-founder. One genuine observation per email. Each step builds narratively on the last.
+- Subject lines: lowercase, punchy, 4-7 words max. No clickbait, no "quick question".
 
 For each step provide relevanceScore (1-10), personalizationScore (1-10), riskScore (1-10 where 1=safe, 10=risky/spammy).
 
