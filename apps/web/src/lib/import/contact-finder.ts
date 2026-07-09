@@ -60,7 +60,29 @@ function splitFullName(fullName: string): { firstName: string; lastName: string 
   return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
 }
 
-async function findViaAnymailFinder(company: { name: string; domain: string }): Promise<AmfContact | null> {
+// AMF decision-maker categories are functional buckets — validated live
+// 2026-07-09, accepted values: ceo, engineering, finance, hr, it, logistics,
+// marketing, operations, buyer, sales. Map each product to its buyer personas
+// so a "CEO not in AMF's index" miss can still resolve a relevant technical or
+// finance leader (broadening [ceo] -> [ceo,engineering,it] rescued
+// allcovered.com, a prior ceo-only miss). Non-buyer titles are still filtered
+// downstream by isBuyerTitle + the send-eligibility gate, so a wider net can
+// never email the wrong person — worst case is an un-emailed stored contact.
+function amfCategoriesForProduct(fitProduct: FitProduct): string[] {
+  switch (fitProduct) {
+    case "REVENUE":
+      return ["ceo", "finance", "operations"]; // founder/CEO + billing/RevOps owner
+    case "TRUST":
+      return ["ceo", "engineering", "it"];      // founder/CEO + CTO/eng + security/IT
+    default:
+      return ["ceo", "engineering", "it", "finance", "operations"]; // BOTH
+  }
+}
+
+async function findViaAnymailFinder(
+  company: { name: string; domain: string },
+  categories: string[],
+): Promise<AmfContact | null> {
   const apiKey = process.env.ANYMAILFINDER_API_KEY;
   if (!apiKey) return null;
 
@@ -68,7 +90,7 @@ async function findViaAnymailFinder(company: { name: string; domain: string }): 
     const res = await fetch("https://api.anymailfinder.com/v5.1/find-email/decision-maker", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ domain: company.domain, decision_maker_category: ["ceo"] }),
+      body: JSON.stringify({ domain: company.domain, decision_maker_category: categories }),
     });
     // Not-found (no charge) or any API error → fall back to the free path.
     if (!res.ok) return null;
@@ -329,7 +351,7 @@ export async function findContactForCompany(companyId: string): Promise<void> {
 
   // Paid finder first when configured: one call, live-verified email, no
   // Tavily spend. Falls through to the free path on miss (misses cost $0).
-  const amf = await findViaAnymailFinder(company);
+  const amf = await findViaAnymailFinder(company, amfCategoriesForProduct(company.fitProduct));
   if (amf) {
     const amfContact = await prisma.contact.upsert({
       where: { email: amf.email },
