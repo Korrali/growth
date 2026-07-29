@@ -242,6 +242,16 @@ export async function sendOutreachStep(
     subject: draft.subject,
     text: bodyWithFooter,
     reply_to: replyTo,
+    // RFC 2369 List-Unsubscribe — lets Gmail/Outlook render a native
+    // "Unsubscribe" control and marks us as a legitimate list sender, which
+    // improves inbox placement (Microsoft especially weights this, and honors
+    // the mailto form even where it distrusts the HTTPS link). We intentionally
+    // omit List-Unsubscribe-Post (one-click) because /unsubscribe is a GET-only
+    // page — advertising one-click would make providers POST to a 405 and read
+    // as broken. mailto + the existing tokenized HTTPS link is the safe win.
+    headers: {
+      "List-Unsubscribe": `<mailto:${fromEmail}?subject=unsubscribe>, <${unsubscribeUrl}>`,
+    },
   };
 
   const res = await fetch("https://api.resend.com/emails", {

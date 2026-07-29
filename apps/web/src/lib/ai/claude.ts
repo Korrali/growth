@@ -41,6 +41,14 @@ function toGroqModel(model: string): string {
   return "meta-llama/llama-4-scout-17b-16e-instruct";
 }
 
+// Backup only: when Groq (primary) AND OpenAI both fail, retry on Claude Haiku —
+// the cheapest Claude tier, plenty for a rescue. The incoming model string is a
+// Groq/Llama id (BULK/WRITING/HIGH_INTENT all resolve to Llama), so it MUST be
+// remapped to a real Claude model id or the Anthropic call 404s.
+function toClaudeModel(_model: string): string {
+  return "claude-haiku-4-5";
+}
+
 function flattenSystem(system: unknown): string {
   if (!system) return "";
   if (typeof system === "string") return system;
@@ -172,6 +180,45 @@ function isHardProviderError(err: unknown): boolean {
   return /credit balance|billing|insufficient|quota|unauthorized|invalid.*api.*key|permission/i.test(errMessage(err));
 }
 
+// Who gets the "a model provider is down" alert, and from where. The alert must
+// reach a human when the free Groq path (or a fallback) dies on expired
+// credits / a revoked key / an exhausted quota — the exact failure that silently
+// starved the funnel on 2026-07-09. Sent via Resend, so the FROM address must be
+// on a Resend-verified domain (korrali.com) — NOT the getkorrali.com SES domain.
+const AI_ALERT_EMAIL = process.env.AI_ALERT_EMAIL ?? "ashish.bhagat@korrali.com";
+const AI_ALERT_FROM = process.env.AI_ALERT_FROM ?? "Korrali Growth <growth@korrali.com>";
+
+// Fire-and-forget founder alert on a provider outage. Called only from inside
+// markProviderDown's one-alert-per-cooldown-window guard, so during an outage
+// it sends at most ~1 email per provider per window (5 min soft / 15 min hard) —
+// no flood. Never awaited and never throws: the AI hot path must not block or
+// break on a mail failure.
+function emailProviderDownAlert(name: ProviderName, hard: boolean, detail: string): void {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return;
+  const body = {
+    from: AI_ALERT_FROM,
+    to: [AI_ALERT_EMAIL],
+    subject: `[Growth AI] ${name} provider DOWN — ${hard ? "HARD, needs action" : "transient"}`,
+    text: [
+      `A model provider in the Growth engine just failed and its circuit breaker opened.`,
+      ``,
+      `Provider: ${name}`,
+      `Class:    ${hard ? "HARD — will keep failing until a human acts (expired credits, revoked/invalid API key, or exhausted quota)" : "soft/transient (rate limit or network blip)"}`,
+      `Error:    ${detail}`,
+      ``,
+      hard
+        ? `Action needed: top up or fix the ${name} account/key. The engine has fallen back to the next provider in the chain (Groq → OpenAI → Claude), but the primary free path won't recover on its own.`
+        : `Usually self-heals after the cooldown — monitoring only, no action expected.`,
+    ].join("\n"),
+  };
+  void fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch((e) => console.error("[ai] provider-down alert email failed to send", e));
+}
+
 function markProviderDown(name: ProviderName, err: unknown): void {
   const now = Date.now();
   const hard = isHardProviderError(err);
@@ -183,6 +230,9 @@ function markProviderDown(name: ProviderName, err: unknown): void {
     console.error(
       `[ai][PROVIDER_DOWN] ${name} ${hard ? "HARD (billing/auth/quota — needs a human)" : "soft (transient)"}: ${errMessage(err)}`,
     );
+    // Email the founder too — console alerts went unseen for 685 failed calls
+    // on 2026-07-09. Inherits the guard above, so it's deduped to 1/window.
+    emailProviderDownAlert(name, hard, errMessage(err));
   }
 }
 
@@ -201,10 +251,14 @@ function markProviderUp(name: ProviderName): void {
 // anthropic.messages.create() directly (no shared generateText() wrapper),
 // so this is the single place resilience needs to live for all of them.
 //
-// claude-* models: Claude (primary) -> OpenAI gpt-4o-mini -> Groq (final).
-// Non-claude models (e.g. HIGH_INTENT_MODEL-tier features not yet migrated
-// to Claude): Groq (primary, unchanged) -> OpenAI gpt-4o-mini (fallback).
-// A provider whose breaker is open is skipped for its cooldown window.
+// Every feature runs Groq-first (the model slots all resolve to Llama ids):
+//   Groq (primary, free) -> OpenAI gpt-4o-mini -> Claude Haiku (final).
+// A request that explicitly asks for a claude-* model instead runs:
+//   Claude (primary) -> OpenAI gpt-4o-mini -> Groq (final).
+// OpenAI and Claude are BACKUP ONLY — present in the chain solely so a Groq
+// outage (expired key/quota) degrades gracefully instead of starving the funnel.
+// Each is included only when its API key is set. A provider whose breaker is
+// open is skipped for its cooldown window.
 export const anthropic = {
   messages: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -244,6 +298,11 @@ export const anthropic = {
             { name: "groq" as const, run: () => callOpenAICompatible(getGroq(), toGroqModel((params.model as string) ?? CLAUDE_MODELS.default), params) },
             ...(hasOpenAI
               ? [{ name: "openai" as const, run: () => callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params) }]
+              : []),
+            // Final backup: Claude Haiku. The model string is a Llama id, so it
+            // must be remapped or Anthropic 404s. Only when ANTHROPIC_API_KEY is set.
+            ...(process.env.ANTHROPIC_API_KEY
+              ? [{ name: "anthropic" as const, run: () => getRealAnthropic().messages.create({ ...params, model: toClaudeModel(params.model as string) }) }]
               : []),
           ];
 
