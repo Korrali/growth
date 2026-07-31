@@ -16,12 +16,30 @@ import { CampaignStatus, EmailStatus, FitProduct } from "@prisma/client";
 const MAX_ENROLLMENTS_PER_RUN = 20;
 const MAX_CONTACT_FINDS_PER_RUN = 25;
 
-// BOTH → Trust: higher ACV wins the first touch; Revenue can nurture later.
+// REPOINTED 2026-07-31: Revenue is the single bet to Jan 2027.
+//
+// BOTH now goes to Revenue. The old rule sent it to Trust on "higher ACV wins
+// the first touch", which is sound in a two-product portfolio but not when one
+// product is the declared bet and the other is coasting on a backlog.
 const CAMPAIGN_PRODUCT_FOR_FIT: Partial<Record<FitProduct, "TRUST" | "REVENUE">> = {
   [FitProduct.TRUST]: "TRUST",
   [FitProduct.REVENUE]: "REVENUE",
-  [FitProduct.BOTH]: "TRUST",
+  [FitProduct.BOTH]: "REVENUE",
 };
+
+// Which product gets first claim on the per-run enrollment budget.
+//
+// Enrollment was previously ordered by fitScore alone. With 54 enrollable Trust
+// companies (best score 9) against 6 for Revenue (best 7), Trust won every one
+// of the 20 slots on merit — which is how the pipeline ended up at 21 active
+// Trust outreaches against 2 for Revenue while Revenue was the stated bet. No
+// one chose that; the sort did.
+//
+// Revenue-fit companies now sort ahead of Trust ones regardless of score, and
+// Trust takes whatever capacity is left. Trust is throttled, not stopped: its
+// banked backlog still gets worked, just after Revenue has had its pick. Set
+// this to "TRUST" to reverse.
+const PRIORITY_PRODUCT: "TRUST" | "REVENUE" = "REVENUE";
 
 export interface AutoEnrollSummary {
   enrolled: number;
@@ -46,7 +64,7 @@ export async function runAutoEnroll(): Promise<AutoEnrollSummary> {
     campaignFor[product] = campaign?.id ?? null;
   }
 
-  const companies = await prisma.company.findMany({
+  const companiesUnsorted = await prisma.company.findMany({
     where: {
       fitScore: { gte: 6 },
       fitProduct: { in: [FitProduct.TRUST, FitProduct.REVENUE, FitProduct.BOTH] },
@@ -62,6 +80,19 @@ export async function runAutoEnroll(): Promise<AutoEnrollSummary> {
       },
     },
   });
+
+  // Stable partition: priority-product companies first, each group still in the
+  // fitScore-desc order the query returned. Done in JS rather than SQL because
+  // the target product is derived from fitProduct via CAMPAIGN_PRODUCT_FOR_FIT
+  // (BOTH maps to a real product), which the database cannot express.
+  const companies = [
+    ...companiesUnsorted.filter(
+      (c) => c.fitProduct && CAMPAIGN_PRODUCT_FOR_FIT[c.fitProduct] === PRIORITY_PRODUCT,
+    ),
+    ...companiesUnsorted.filter(
+      (c) => !c.fitProduct || CAMPAIGN_PRODUCT_FOR_FIT[c.fitProduct] !== PRIORITY_PRODUCT,
+    ),
+  ];
 
   for (const company of companies) {
     if (summary.enrolled >= MAX_ENROLLMENTS_PER_RUN) break;

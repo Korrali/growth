@@ -156,16 +156,45 @@ async function hnShowHnCompanies(): Promise<SearchResult[]> {
 // so consecutive daily runs alternate between sets. With the Tavily `days: 60`
 // recency filter, even repeated queries find new companies published since last run.
 
-const QUERY_SET_A = [
-  // Trust ICP — enterprise AI/SaaS buyers
+// ─── Budget allocation between products ──────────────────────────────────────
+// Discovery runs WEEKLY (Mon 5am UTC) on the free Tavily plan — roughly 35
+// credits a run, kept under 200/mo including community scans. Every query in
+// the chosen set runs, so set size IS the budget: a Trust query costs a Revenue
+// query.
+//
+// REPOINTED 2026-07-31 to Revenue-heavy. The split had been ~50/50, but the
+// two products are in completely different supply positions:
+//   Trust:   54 companies already enrollable (fitScore >= 6), 35 with contacts
+//   Revenue:  6 companies enrollable, 5 with contacts, best score 7
+// Trust cannot work through the backlog it already has at 30 sends/day, so
+// every Trust query buys inventory that will never be used, while Revenue —
+// the single bet to Jan 2027 — starves. Trust queries are kept (not deleted)
+// at TRUST_QUERY_LIMIT so the decision is one number to reverse, not a rewrite.
+const TRUST_QUERY_LIMIT = 6;
+
+// Trust queries, best-first — only the first TRUST_QUERY_LIMIT actually run.
+const TRUST_QUERIES_A = [
   `AI startup enterprise customers "security questionnaire" OR "vendor review" -vanta -drata -secureframe -scrut`,
+  `"EU AI Act" compliance startup enterprise customers vendor -vanta -drata`,
+  `"AI agent" OR LLM startup enterprise "security questionnaire" OR procurement`,
   `B2B SaaS startup "enterprise deal" OR "enterprise pilot" security compliance`,
+  `"ISO 42001" OR "AI governance" B2B startup enterprise customers`,
+  `site:news.ycombinator.com "Launch HN" AI B2B enterprise`,
+  `site:reddit.com r/SaaS "security questionnaire" startup`,
+  `site:reddit.com r/startups "vendor review" OR "SOC 2" enterprise B2B`,
   `YC funded AI SaaS company enterprise sales -compliance -soc2`,
   `AI platform startup raised Series A enterprise customers`,
   `"AI-powered" OR "AI-native" B2B SaaS startup enterprise customers product`,
   `site:techcrunch.com AI SaaS startup enterprise raises funding`,
   `site:ycombinator.com company AI SaaS enterprise customers`,
   `B2B AI devtools startup enterprise customers compliance security`,
+  `IT managed service provider OR MSP enterprise clients "security review" OR "vendor questionnaire"`,
+  `data processing OR data platform company enterprise customers compliance SOC2`,
+  `site:producthunt.com "AI agent" OR copilot B2B enterprise launched`,
+  `vertical AI startup healthcare OR legal OR finance enterprise customers`,
+];
+
+const REVENUE_QUERIES_A = [
   // Revenue ICP — Stripe subscription SaaS at scale.
   //
   // REWRITTEN 2026-07-31. The previous queries here were open web searches
@@ -187,9 +216,6 @@ const QUERY_SET_A = [
   // acute motivation to clean up billing leakage before a buyer finds it.
   `site:acquire.com SaaS listing MRR Stripe subscription`,
   `site:flippa.com SaaS business "MRR" Stripe subscription recurring`,
-  // Reddit — Trust ICP intent signals (via Tavily, no API key needed)
-  `site:reddit.com r/SaaS "security questionnaire" startup`,
-  `site:reddit.com r/startups "vendor review" OR "SOC 2" enterprise B2B`,
   // Reddit — Revenue ICP intent signals
   `site:reddit.com r/stripe "failed payments" SaaS subscription`,
   `site:reddit.com r/SaaS "billing" Stripe subscription problem startup`,
@@ -197,17 +223,6 @@ const QUERY_SET_A = [
   `paid community OR membership site Skool OR Circle OR "Mighty Networks" founder revenue`,
   `course creator Kajabi OR Podia OR Teachable business "failed payments" OR churn`,
   `paid newsletter OR membership business Stripe recurring revenue creator`,
-  // Trust ICP — non-SaaS B2B selling to enterprise (broadened beyond "SaaS")
-  `IT managed service provider OR MSP enterprise clients "security review" OR "vendor questionnaire"`,
-  `data processing OR data platform company enterprise customers compliance SOC2`,
-  // Trust ICP — AI-native wave (2026-07-07: replaced frozen BillClear/MedScan/
-  // GROWTH_SERVICE queries; EU AI Act enforcement 2026-08-02 is the trigger)
-  `"EU AI Act" compliance startup enterprise customers vendor -vanta -drata`,
-  `"ISO 42001" OR "AI governance" B2B startup enterprise customers`,
-  `"AI agent" OR LLM startup enterprise "security questionnaire" OR procurement`,
-  `site:producthunt.com "AI agent" OR copilot B2B enterprise launched`,
-  `vertical AI startup healthcare OR legal OR finance enterprise customers`,
-  `site:news.ycombinator.com "Launch HN" AI B2B enterprise`,
   // Revenue ICP — scaling SaaS on Stripe ($50–150K MRR core band, corrected
   // 2026-07-09: was indie/bootstrapped $5–100K — too small, sub-$30K accounts
   // net only tens of $/mo on 10% performance pricing and can't be upsold to flat)
@@ -215,18 +230,40 @@ const QUERY_SET_A = [
   `site:boards.greenhouse.io "revenue operations" OR RevOps SaaS subscription`,
   `site:jobs.lever.co billing OR subscriptions platform engineer SaaS`,
   `site:reddit.com r/SaaS "MRR" Series A OR "scaling" Stripe billing failed payments`,
+  // Added 2026-07-31 with the Revenue repoint — more entity-source angles, the
+  // principle that fixed the 88% reject rate: target pages that ARE a company.
+  `site:boards.greenhouse.io "billing" OR "subscription" SaaS senior engineer`,
+  `site:jobs.ashbyhq.com Stripe billing OR subscription SaaS`,
+  `site:job-boards.greenhouse.io "RevOps" OR "revenue operations" subscription SaaS`,
+  `site:stackshare.io "Stripe" "Chargebee" OR "Recurly" SaaS company stack`,
+  `site:wellfound.com/company "subscription" B2B SaaS Series A`,
+  `site:acquire.com SaaS "$10k MRR" OR "$20k MRR" OR "$50k MRR" subscription`,
+  `site:flippa.com "SaaS" listing subscription monthly recurring Stripe`,
+  `site:indiehackers.com "we hit" MRR SaaS subscription Stripe milestone`,
 ];
 
-const QUERY_SET_B = [
-  // Trust ICP — fresh angles on same buyer profile
+const TRUST_QUERIES_B = [
   `B2B SaaS startup "enterprise customers" "security review" OR "privacy review" raised`,
+  `"AI Act" OR "AI regulation" B2B startup enterprise customers compliance`,
+  `AI copilot OR assistant B2B startup "enterprise ready" OR "SOC 2"`,
+  `B2B SaaS startup "enterprise" "SOC 2" working OR pursuing -vanta -drata`,
+  `"AI vendor" review OR assessment enterprise procurement startup`,
+  `site:reddit.com r/startups "security questionnaire" OR "trust page" B2B SaaS`,
   `AI startup founders "enterprise sales" "compliance" challenge 2025`,
   `site:techcrunch.com "raises" B2B SaaS startup enterprise 10 50 employees`,
   `"series A" AI startup B2B enterprise SaaS "just launched" OR "just raised"`,
   `site:producthunt.com "enterprise" AI SaaS tool launched`,
   `"we're hiring" B2B AI SaaS startup enterprise customers trust security`,
   `AI agent OR "AI assistant" startup enterprise B2B customers pilot`,
-  `B2B SaaS startup "enterprise" "SOC 2" working OR pursuing -vanta -drata`,
+  `site:reddit.com r/SaaS "enterprise" "compliance" OR "security review" startup`,
+  `fintech OR "data processor" startup enterprise customers "SOC 2" OR "security review"`,
+  `IT services company OR managed security provider enterprise clients compliance`,
+  `"model card" OR "AI transparency" startup enterprise buyers trust`,
+  `site:techcrunch.com AI startup enterprise adoption security trust`,
+  `generative AI startup B2B "series A" enterprise pilot customers`,
+];
+
+const REVENUE_QUERIES_B = [
   // Revenue ICP — fresh angles, same entity-source principle as SET_A
   // (see the rewrite note there: target pages that ARE a company, not
   // articles about companies).
@@ -238,9 +275,6 @@ const QUERY_SET_B = [
   `site:ycombinator.com/companies subscription SaaS Stripe payments`,
   `site:acquire.com SaaS "monthly recurring revenue" Stripe listing`,
   `site:flippa.com SaaS subscription "recurring revenue" Stripe business`,
-  // Reddit — Trust ICP intent signals (via Tavily, no API key needed)
-  `site:reddit.com r/SaaS "enterprise" "compliance" OR "security review" startup`,
-  `site:reddit.com r/startups "security questionnaire" OR "trust page" B2B SaaS`,
   // Reddit — Revenue ICP intent signals
   `site:reddit.com r/startups "Stripe" billing subscription issue startup`,
   `site:reddit.com r/entrepreneurship "failed payments" OR "payment recovery" SaaS`,
@@ -248,29 +282,38 @@ const QUERY_SET_B = [
   `Skool OR Circle community owner "monthly members" revenue business`,
   `membership site OR "online academy" founder Stripe subscriptions growing`,
   `site:reddit.com r/coursecreators "failed payments" OR Stripe OR churn`,
-  // Trust ICP — non-SaaS B2B selling to enterprise (broadened, fresh angles)
-  `fintech OR "data processor" startup enterprise customers "SOC 2" OR "security review"`,
-  `IT services company OR managed security provider enterprise clients compliance`,
-  // Trust ICP — AI-native wave, fresh angles (2026-07-07: replaced frozen-product queries)
-  `"AI Act" OR "AI regulation" B2B startup enterprise customers compliance`,
-  `"model card" OR "AI transparency" startup enterprise buyers trust`,
-  `AI copilot OR assistant B2B startup "enterprise ready" OR "SOC 2"`,
-  `site:techcrunch.com AI startup enterprise adoption security trust`,
-  `"AI vendor" review OR assessment enterprise procurement startup`,
-  `generative AI startup B2B "series A" enterprise pilot customers`,
   // Revenue ICP — failed-payment pain, fresh angles
   `SaaS founder "involuntary churn" OR "failed payments" Stripe fix`,
   `subscription business "payment retries" OR dunning Stripe founder`,
   `site:indiehackers.com "failed payments" OR churn Stripe SaaS`,
   `site:reddit.com r/SaaS pricing upgrade billing Stripe founder`,
+  // Added 2026-07-31 with the Revenue repoint.
+  `site:boards.greenhouse.io "payments" OR "billing" team SaaS hiring`,
+  `site:jobs.ashbyhq.com "subscription" OR "recurring revenue" SaaS engineer`,
+  `site:jobs.lever.co "revenue operations" OR RevOps SaaS subscription`,
+  `site:stackshare.io SaaS billing Stripe "subscription management"`,
+  `site:wellfound.com/company SaaS "recurring revenue" payments Stripe`,
+  `site:acquire.com "SaaS" profitable subscription business for sale MRR`,
+  `site:flippa.com SaaS "subscribers" recurring Stripe monthly revenue`,
+  `site:indiehackers.com SaaS founder "pricing change" OR "raised prices" Stripe`,
 ];
 
-// Pick the query set for this run: alternate daily. Weekly rotation exhausted
-// each set (runs kept re-finding the same domains all week: found=187 new=0),
-// so daily alternation doubles novelty at the same per-run Tavily cost.
-function pickQuerySet(): string[] {
+// Pick the query set for this run: alternate between sets. Discovery runs
+// weekly (Mon), and consecutive Mondays are 7 days apart — an odd number — so
+// day-parity alternation flips the set every run. Weekly rotation of a single
+// set exhausted it (runs kept re-finding the same domains: found=187 new=0).
+//
+// Each set is Revenue-first, with Trust capped at TRUST_QUERY_LIMIT — see the
+// allocation note above for why the split is no longer even.
+function pickQuerySet(): { queries: string[]; label: "A" | "B" } {
   const dayNumber = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
-  return dayNumber % 2 === 0 ? QUERY_SET_A : QUERY_SET_B;
+  const useA = dayNumber % 2 === 0;
+  return {
+    label: useA ? "A" : "B",
+    queries: useA
+      ? [...REVENUE_QUERIES_A, ...TRUST_QUERIES_A.slice(0, TRUST_QUERY_LIMIT)]
+      : [...REVENUE_QUERIES_B, ...TRUST_QUERIES_B.slice(0, TRUST_QUERY_LIMIT)],
+  };
 }
 
 // ─── Extraction prompt ────────────────────────────────────────────────────────
@@ -370,8 +413,14 @@ export async function discoverCompanies(runId: string): Promise<void> {
   let totalNew = 0;
   let lastError: string | null = null;
 
-  const queries = pickQuerySet();
-  console.log(`[discoverer] run=${runId} using query set ${Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 7)) % 2 === 0 ? "A" : "B"}`);
+  // The label comes from the same call that picked the queries. It used to be
+  // recomputed inline with a WEEK-based formula while selection was DAY-based,
+  // so the log routinely named the set that had not run.
+  const { queries, label } = pickQuerySet();
+  console.log(
+    `[discoverer] run=${runId} using query set ${label} (${queries.length} queries, ` +
+    `Revenue-weighted: Trust capped at ${TRUST_QUERY_LIMIT})`,
+  );
 
   // ── Hacker News "Show HN" (free, no Tavily budget) ─────────────────────────
   try {
