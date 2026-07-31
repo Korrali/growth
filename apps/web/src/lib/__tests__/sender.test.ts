@@ -8,10 +8,15 @@ const mockPrisma = {
   outreach: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
   outreachEmailDraft: { findUnique: vi.fn() },
   emailMessage: { create: vi.fn() },
-  auditLog: { create: vi.fn() },
+  auditLog: { create: vi.fn(), count: vi.fn() },
   contact: { update: vi.fn() },
 };
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
+
+const mockEnqueueEmailGenerate = vi.fn();
+vi.mock("@/lib/queue", () => ({
+  enqueueEmailGenerate: mockEnqueueEmailGenerate,
+}));
 
 const mockCheckSendEligibility = vi.fn();
 vi.mock("@/lib/sending/eligibility", () => ({
@@ -96,6 +101,8 @@ beforeEach(() => {
   mockPrisma.outreachEmailDraft.findUnique.mockResolvedValue(makeDraft());
   mockPrisma.emailMessage.create.mockResolvedValue({});
   mockPrisma.auditLog.create.mockResolvedValue({});
+  mockPrisma.auditLog.count.mockResolvedValue(0);
+  mockEnqueueEmailGenerate.mockResolvedValue("job_1");
   mockPrisma.contact.update.mockResolvedValue({});
   mockPrisma.outreach.update.mockResolvedValue({});
   mockScheduleNextStep.mockResolvedValue(undefined);
@@ -175,6 +182,39 @@ describe("sendOutreachStep — missing draft", () => {
     const result = await sendOutreachStep("out_1", 1);
     expect(result).toEqual({ sent: false, reason: "no-draft" });
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // Regression: this branch used to return without advancing nextSendAt or
+  // stopping the sequence, so the due-check cron re-queued the same outreach
+  // every hour indefinitely (61 aborts on one record in prod).
+  it("requests draft generation and reschedules instead of spinning", async () => {
+    mockPrisma.outreachEmailDraft.findUnique.mockResolvedValue(null);
+    mockPrisma.auditLog.count.mockResolvedValue(0);
+    const { sendOutreachStep } = await importSender();
+    await sendOutreachStep("out_1", 1);
+
+    expect(mockEnqueueEmailGenerate).toHaveBeenCalledWith({ outreachId: "out_1" });
+    expect(mockPrisma.outreach.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "out_1" },
+        data: { nextSendAt: expect.any(Date) },
+      }),
+    );
+    expect(mockStopOutreachSequence).not.toHaveBeenCalled();
+  });
+
+  it("stops the sequence once no-draft retries are exhausted", async () => {
+    mockPrisma.outreachEmailDraft.findUnique.mockResolvedValue(null);
+    mockPrisma.auditLog.count.mockResolvedValue(2); // this attempt makes 3
+    const { sendOutreachStep } = await importSender();
+    await sendOutreachStep("out_1", 1);
+
+    expect(mockStopOutreachSequence).toHaveBeenCalledWith(
+      "out_1",
+      "no-draft:retries-exhausted",
+    );
+    expect(mockEnqueueEmailGenerate).not.toHaveBeenCalled();
+    expect(mockPrisma.outreach.update).not.toHaveBeenCalled();
   });
 });
 

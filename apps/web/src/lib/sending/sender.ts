@@ -6,6 +6,12 @@ import { scheduleNextStep, stopOutreachSequence } from "@/lib/sending/sequence-s
 import { injectUtmIntoText } from "@/lib/utm";
 import { PRODUCTS } from "@/lib/products";
 import { verifyEmail } from "@/lib/import/email-verifier";
+import { enqueueEmailGenerate } from "@/lib/queue";
+
+// How many times a step may abort for a missing draft before the sequence is
+// stopped for good. Each attempt is an hour apart, so this is a ~3 hour window
+// for draft generation to succeed before we stop retrying.
+const MAX_NO_DRAFT_ATTEMPTS = 3;
 
 // Reasons that mean the outreach should be permanently stopped (never re-queued).
 // These are conditions that won't resolve by waiting — a low quality score,
@@ -122,16 +128,39 @@ export async function sendOutreachStep(
   });
 
   if (!draft) {
-    // Live mode — abort if no AI draft exists
+    // Live mode — no AI draft exists for this step.
+    //
+    // This used to return without touching nextSendAt or the outreach status,
+    // which left the record permanently due: the cron re-queued it every hour,
+    // it aborted here again, forever, with zero forward progress. That is the
+    // same trap the eligibility block above explicitly guards against — the
+    // guard just never covered this branch. Observed in prod at 61 aborts on a
+    // single outreach before anyone noticed, because it looks like activity.
+    //
+    // Self-heal instead: ask for the draft to be generated and retry in an
+    // hour. Give up permanently once retries are exhausted so a record whose
+    // generation keeps failing can't spin forever.
+    const priorAborts = await prisma.auditLog.count({
+      where: { action: "outreach.aborted", entityId: outreachId },
+    });
+
     await prisma.auditLog.create({
       data: {
         actor: "system",
         action: "outreach.aborted",
         entity: "Outreach",
         entityId: outreachId,
-        metadata: { stepNumber, reason: "no-draft" },
+        metadata: { stepNumber, reason: "no-draft", priorAborts },
       },
     });
+
+    if (priorAborts + 1 >= MAX_NO_DRAFT_ATTEMPTS) {
+      await stopOutreachSequence(outreachId, "no-draft:retries-exhausted").catch(() => {});
+    } else {
+      // singletonKey on the generate queue dedupes concurrent requests for us.
+      await enqueueEmailGenerate({ outreachId }).catch(() => {});
+      await rescheduleIn(outreachId, 1);
+    }
     return { sent: false, reason: "no-draft" };
   }
 
