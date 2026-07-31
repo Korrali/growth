@@ -6,7 +6,15 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime queries go through PgBouncer (:6432, transaction pooling).
+  url       = env("DATABASE_URL")
+  // Migrations must NOT. `prisma migrate deploy` takes a session-level advisory
+  // lock (pg_advisory_lock), which cannot survive transaction pooling — the
+  // backend is returned to the pool between statements, so the lock loop times
+  // out and the deploy aborts before build/restart. directUrl points at Postgres
+  // directly (:5432, no ?pgbouncer=true). Added 2026-07-31 after three of four
+  // growth deploys failed this way. Requires DIRECT_URL in .env.production.
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── Core: Organization + User + Membership ──────────────────────────────────
