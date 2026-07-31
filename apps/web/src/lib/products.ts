@@ -65,8 +65,21 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
     name: "Korrali Revenue",
     brand: "Korrali",
     url: "https://revenue.korrali.com",
+    // POSITIONING (rewritten 2026-07-31): lead with billing-integrity findings,
+    // NOT failed-payment recovery. Dunning is a bloodbath — Stripe Smart Retries
+    // ships free and already-on, and Churn Buster / Baremetrics Recover / Paddle
+    // Retain / Butter / Gravy all fight over what's left, several of them also
+    // performance-priced. "Pay only on recovery" is table stakes there, not a wedge.
+    //
+    // The uncontested half is the config-error class: stale prices, never-expiring
+    // coupons, invoice gaps, duplicate charges. Stripe structurally CANNOT detect
+    // these — it doesn't know what you *intended* to bill. No incumbent owns this,
+    // it needs only READ access (kills the biggest cold-outreach trust objection),
+    // and the findings are self-verifying in the prospect's own dashboard.
+    //
+    // Lead offer is therefore the READ-ONLY audit, not the write-access subscription.
     oneLiner:
-      "Revenue recovery for Stripe businesses — detects failed payments, revenue leakage, duplicate charges, and billing anomalies, then recovers the money. The headline offer is performance pricing: pay nothing unless we recover revenue (10% of recovered, capped at $5K/mo). A one-time $499 Stripe revenue audit is the low-commitment entry point.",
+      "A read-only audit of your Stripe account that finds revenue your own billing configuration is quietly leaking — customers still paying a price you retired, 100%-off coupons that never expired, subscriptions that silently stopped invoicing, and duplicate charges. Stripe can't surface these because Stripe doesn't know what you meant to charge. Read-only access, findings you can verify in your own dashboard in 30 seconds. A one-time $499 audit is the entry point; ongoing detection plus automated recovery (10% of what's recovered, capped at $5K/mo) is the upsell once the leaks are proven.",
     icp: `CORE sweet spot (score 8–10): $50–150K MRR subscription businesses on Stripe. This band is where the unit economics work: 3–8% leakage is $1.5–12K/mo (recovery clearly beats the flat $999 Scale plan), the account is large enough to justify a warm product-led sales touch, and it converts off the free audit. Score 8+ when MRR (or strong proxies — Series A/B, 30–150 employees, "scaling revenue") lands in or above this band.
 Marginal (score 4–5, treat as lead-gen not primary target): businesses under ~$30K MRR. Their leakage is real but small, the 10% performance fee nets us only tens of dollars a month, and they can't be upsold to a flat plan (it would cost more than we recover for them). Prospect them only when other signals are strong; they're pipeline colour and future case studies, not the revenue target.
 Two segments qualify at the core band:

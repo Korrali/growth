@@ -166,15 +166,27 @@ const QUERY_SET_A = [
   `site:techcrunch.com AI SaaS startup enterprise raises funding`,
   `site:ycombinator.com company AI SaaS enterprise customers`,
   `B2B AI devtools startup enterprise customers compliance security`,
-  // Revenue ICP — Stripe subscription SaaS at scale
-  `SaaS startup Series A Stripe billing subscriptions revenue scale`,
-  `"failed payments" OR "billing recovery" SaaS startup Stripe subscription`,
-  `B2B SaaS "RevOps" OR "revenue operations" Stripe billing engineering team`,
-  `site:stripe.com partner OR case-study subscription SaaS startup`,
-  `subscription SaaS company "Series A" OR "Series B" payments billing`,
-  `site:producthunt.com SaaS subscription billing Stripe payments`,
-  `"just closed" OR "raised" B2B SaaS startup enterprise customers Stripe`,
-  `site:news.ycombinator.com "Show HN" B2B SaaS enterprise OR Stripe`,
+  // Revenue ICP — Stripe subscription SaaS at scale.
+  //
+  // REWRITTEN 2026-07-31. The previous queries here were open web searches
+  // ("SaaS startup Series A Stripe billing revenue scale") which return
+  // ARTICLES ABOUT companies — TechCrunch pieces, listicles, blog posts —
+  // not company entities. That is why 650 of 745 discovered companies scored
+  // 1-2: the fit scorer was working correctly on journalism. These target
+  // pages that ARE a company instead: job boards (a JD naming Stripe is a
+  // VERIFIED Stripe user, currently spending), tech-stack directories, and
+  // marketplace listings that publish MRR outright.
+  `site:boards.greenhouse.io "Stripe" subscription OR billing engineer`,
+  `site:job-boards.greenhouse.io "Stripe" billing OR payments OR subscription`,
+  `site:jobs.lever.co "Stripe" subscription billing OR payments engineer`,
+  `site:stackshare.io Stripe subscription SaaS stack`,
+  `site:wellfound.com/company B2B SaaS subscription Stripe`,
+  `site:ycombinator.com/companies B2B SaaS subscription billing`,
+  // Acquire.com/Flippa sellers publish MRR outright — the only free source
+  // that directly verifies the $50-150K band. A seller in diligence also has
+  // acute motivation to clean up billing leakage before a buyer finds it.
+  `site:acquire.com SaaS listing MRR Stripe subscription`,
+  `site:flippa.com SaaS business "MRR" Stripe subscription recurring`,
   // Reddit — Trust ICP intent signals (via Tavily, no API key needed)
   `site:reddit.com r/SaaS "security questionnaire" startup`,
   `site:reddit.com r/startups "vendor review" OR "SOC 2" enterprise B2B`,
@@ -200,8 +212,8 @@ const QUERY_SET_A = [
   // 2026-07-09: was indie/bootstrapped $5–100K — too small, sub-$30K accounts
   // net only tens of $/mo on 10% performance pricing and can't be upsold to flat)
   `site:indiehackers.com SaaS "$50k MRR" OR "$100k MRR" OR "$150k MRR" Stripe`,
-  `scaling SaaS "$50k MRR" OR "$100k MRR" Series A OR Series B Stripe subscription`,
-  `mid-market B2B SaaS Stripe subscription billing "revenue operations" scaling`,
+  `site:boards.greenhouse.io "revenue operations" OR RevOps SaaS subscription`,
+  `site:jobs.lever.co billing OR subscriptions platform engineer SaaS`,
   `site:reddit.com r/SaaS "MRR" Series A OR "scaling" Stripe billing failed payments`,
 ];
 
@@ -215,15 +227,17 @@ const QUERY_SET_B = [
   `"we're hiring" B2B AI SaaS startup enterprise customers trust security`,
   `AI agent OR "AI assistant" startup enterprise B2B customers pilot`,
   `B2B SaaS startup "enterprise" "SOC 2" working OR pursuing -vanta -drata`,
-  // Revenue ICP — fresh angles
-  `subscription SaaS startup "Stripe" billing engineering scale problem`,
-  `B2B SaaS "churn" OR "dunning" OR "payment failure" Stripe subscription 2025`,
-  `site:news.ycombinator.com Stripe subscription billing SaaS scale`,
-  `"series A" OR "series B" SaaS startup subscription billing payments engineering`,
-  `B2B SaaS "monthly recurring revenue" Stripe billing problem OR challenge`,
-  `startup engineering team "billing infrastructure" OR "payment infrastructure" Stripe`,
-  `site:linkedin.com B2B SaaS startup Stripe subscription payments 50 100 employees`,
-  `"we use Stripe" B2B SaaS startup subscription revenue scale customers`,
+  // Revenue ICP — fresh angles, same entity-source principle as SET_A
+  // (see the rewrite note there: target pages that ARE a company, not
+  // articles about companies).
+  `site:boards.greenhouse.io "Stripe" SaaS engineer subscription`,
+  `site:jobs.lever.co "Stripe" SaaS billing platform`,
+  `site:job-boards.greenhouse.io SaaS "recurring revenue" OR subscription engineer`,
+  `site:stackshare.io "Stripe" B2B SaaS billing tools`,
+  `site:wellfound.com/company subscription SaaS billing payments`,
+  `site:ycombinator.com/companies subscription SaaS Stripe payments`,
+  `site:acquire.com SaaS "monthly recurring revenue" Stripe listing`,
+  `site:flippa.com SaaS subscription "recurring revenue" Stripe business`,
   // Reddit — Trust ICP intent signals (via Tavily, no API key needed)
   `site:reddit.com r/SaaS "enterprise" "compliance" OR "security review" startup`,
   `site:reddit.com r/startups "security questionnaire" OR "trust page" B2B SaaS`,
