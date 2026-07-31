@@ -47,7 +47,28 @@ Founder can't spend on Resend Pro. New plan — **getkorrali.com** (already owne
 | 4 | 30 | bounce still <3% |
 | 5+ | 50 (steady state) | complaint rate <0.1% |
 
-Any week failing its condition → drop back one level for a full week. Bounce >5% on any day → global emergency stop (`growthSettings.globalEmergencyStop`), diagnose before resuming. Never raise `MAX_SENDS_PER_DAY` env default; set per-campaign `dailyLimit` instead so the global cap stays as backstop.
+Any week failing its condition → drop back one level for a full week. Bounce >5% on any day → global emergency stop (`growthSettings.globalEmergencyStop`), diagnose before resuming.
+
+### Calendar (warming phase 1 began 2026-07-07)
+
+| Week | Dates | Cap/day |
+|---|---|---|
+| 1–2 | Jul 7 – Jul 20 | 10 |
+| 3 | Jul 21 – Jul 27 | 20 |
+| 4 | **Jul 28 – Aug 3 ← we are here (2026-07-31)** | **30** |
+| 5+ | Aug 4 onward | 50 |
+
+A campaign `dailyLimit` of 30 on 2026-07-31 is **on schedule**, not ahead of it — provided week 4's condition (bounce still <3%) actually held. The dates are necessary, not sufficient: advancement is condition-gated, so verify bounce/open rates before letting a level stand.
+
+### How the caps actually compose (corrected 2026-07-31)
+
+`MAX_SENDS_PER_DAY` **is a hard ceiling**, and the effective cap is `min(campaign.dailyLimit, MAX_SENDS_PER_DAY)`.
+
+This doc previously said to set per-campaign `dailyLimit` "so the global cap stays as backstop" — that was **not true in code**. [eligibility.ts](apps/web/src/lib/sending/eligibility.ts) used `campaign.dailyLimit ?? getEnvInt("MAX_SENDS_PER_DAY", 20)`, so any campaign value *replaced* the env cap rather than being bounded by it. A mis-set campaign could have ramped straight past the warming schedule with nothing to stop it. Fixed 2026-07-31 to clamp with `Math.min`.
+
+**Consequence:** raising a campaign `dailyLimit` alone no longer raises throughput past the env value. To advance a warming step you must now raise **both** — the campaign `dailyLimit` *and* `MAX_SENDS_PER_DAY` on the EC2 `.env.production` (then `pm2 restart growth-worker-prod --update-env`). That is the intended behaviour: two deliberate actions to increase send volume, one of them on the server.
+
+Note `perDomainLimit` (gate 8) still uses `??` fallback semantics and was deliberately left alone — the runbook only ever claimed backstop behaviour for the daily cap, and clamping to the env default of 1 would silently override any campaign intentionally set higher.
 
 ## Standing rules
 - Root `korrali.com` = transactional + newsletter ONLY. No cold sends, ever, from root — retire `outreach@korrali.com` as a from-address once the subdomain is live.

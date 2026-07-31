@@ -114,7 +114,14 @@ export async function checkSendEligibility(
   if (existingMessage) return ineligible("already_sent_this_step");
 
   // Gate 7: Daily send limit
-  const dailyLimit = outreach.campaign.dailyLimit ?? getEnvInt("MAX_SENDS_PER_DAY", 20);
+  // The campaign dailyLimit is the operational knob for warming, but
+  // MAX_SENDS_PER_DAY is a HARD CEILING, not a default. DELIVERABILITY_RUNBOOK.md
+  // states "set per-campaign dailyLimit instead so the global cap stays as
+  // backstop" — with `??` that was never true: any campaign dailyLimit silently
+  // replaced the env cap, so a mis-set campaign could ramp straight past the
+  // warming schedule with nothing to stop it. Clamp instead.
+  const globalDailyCap = getEnvInt("MAX_SENDS_PER_DAY", 20);
+  const dailyLimit = Math.min(outreach.campaign.dailyLimit ?? globalDailyCap, globalDailyCap);
   const todaySends = await prisma.emailMessage.count({
     where: { direction: "OUTBOUND", sentAt: { gte: todayBucketStart() } },
   });
