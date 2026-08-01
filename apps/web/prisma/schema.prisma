@@ -107,6 +107,8 @@ enum FitProduct {
 enum CampaignProduct {
   TRUST
   REVENUE
+  DATA
+  WEB
   BILLCLEAR
   MEDSCAN
   GROWTH_SERVICE  // Meta-campaign selling DFY outreach; also used for external client campaigns

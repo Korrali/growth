@@ -3,7 +3,7 @@
 // compose from this file, so adding or repositioning a product happens here
 // and nowhere else.
 
-export type MarketedProduct = "TRUST" | "REVENUE" | "BILLCLEAR" | "MEDSCAN" | "GROWTH_SERVICE";
+export type MarketedProduct = "TRUST" | "REVENUE" | "DATA" | "WEB" | "BILLCLEAR" | "MEDSCAN" | "GROWTH_SERVICE";
 
 export interface ProductProfile {
   key: MarketedProduct;
@@ -115,6 +115,46 @@ ALWAYS REJECT — these are competitors or non-buyers for Revenue:
     ],
     outboundViable: true,
     seoCta: "See your revenue health for free at revenue.korrali.com",
+  },
+
+  DATA: {
+    key: "DATA",
+    name: "Korrali Data",
+    brand: "Korrali",
+    url: "https://data.korrali.com",
+    oneLiner:
+      "Convert, validate and repair business files for accounting and operations systems — OFX/QIF/XLSX to CSV, CSV health checks, duplicate-row finding, and platform-specific fixers (Xero, QuickBooks, Wise, Revolut, Stripe, PayPal, Square). Free preview, pay per file or a monthly plan.",
+    icp: `Korrali Data is a low-ACV, high-volume self-serve SEO play, not an outbound target list — content should target the SEARCHER, not a company.
+
+Good fit for article topics (score 6-10): bookkeepers, accountants, and small-business owners who hit a specific, nameable file problem — "OFX won't open in Excel", "QuickBooks rejecting my CSV import", "Xero bank feed CSV format wrong", "duplicate transactions in my bank export". These are long-tail, high-intent, low-competition queries tied to a specific working tool on the site.
+
+ALWAYS REJECT as topics: generic "best accounting software" or "bookkeeping tips" content with no file-conversion angle — Data's tools only solve file-format and data-hygiene problems, not general bookkeeping advice, and content should stay tied to a real tool on data.korrali.com.`,
+    buyers:
+      "Bookkeepers, accountants, small-business owners, and data-migration specialists searching for a specific file-conversion or file-repair problem.",
+    personas: ['"bookkeeper"', '"accountant"', '"controller"', '"operations manager"'],
+    // Self-serve SEO/organic product, no sales motion — content only, no cold outreach.
+    outboundViable: false,
+    seoCta: "Convert or check your file free at data.korrali.com",
+  },
+
+  WEB: {
+    key: "WEB",
+    name: "Korrali Web",
+    brand: "Korrali",
+    url: "https://web.korrali.com",
+    oneLiner:
+      "Deterministic public-website diagnostics — redirect chains, security headers, TLS/SSL certificates, page metadata, broken links, and mixed content. Free summary, unlock the full report or run ongoing monitoring.",
+    icp: `Korrali Web is a low-ACV, high-volume self-serve SEO play, not an outbound target list — content should target the SEARCHER, not a company.
+
+Good fit for article topics (score 6-10): site owners, agencies, and technical marketers searching for a specific, nameable website problem — "why is my site redirecting to the wrong URL", "check security headers online", "SSL certificate expiring warning", "find broken links on my website free", "meta tags checker". These map directly to a real check the tool performs.
+
+ALWAYS REJECT as topics: generic "SEO tips" or "website design" content with no diagnostic angle — Web's tools only run deterministic technical checks, not design or content advice, and content should stay tied to a real check on web.korrali.com.`,
+    buyers:
+      "Site owners, agencies, and technical marketers searching for a specific website diagnostic problem.",
+    personas: ['"site owner"', '"webmaster"', '"technical marketer"', '"agency owner"'],
+    // Self-serve SEO/organic product, no sales motion — content only, no cold outreach.
+    outboundViable: false,
+    seoCta: "Check your website free at web.korrali.com",
   },
 
   BILLCLEAR: {

@@ -237,6 +237,9 @@ const SEQUENCES: Record<CampaignProduct, TrialEmailTemplate[]> = {
   REVENUE: REVENUE_SEQUENCE,
   BILLCLEAR: BILLCLEAR_SEQUENCE,
   MEDSCAN: MEDSCAN_SEQUENCE,
+  // Data/Web are pay-per-use, not trial-based — no nurture sequence yet.
+  DATA: [],
+  WEB: [],
   GROWTH_SERVICE: [],
 };
 
@@ -345,6 +348,9 @@ const WINBACK_SEQUENCES: Record<CampaignProduct, TrialEmailTemplate[]> = {
   REVENUE: REVENUE_WINBACK,
   BILLCLEAR: BILLCLEAR_WINBACK,
   MEDSCAN: MEDSCAN_WINBACK,
+  // Data/Web are pay-per-use, not trial-based — no win-back sequence yet.
+  DATA: [],
+  WEB: [],
   GROWTH_SERVICE: [],
 };
 
