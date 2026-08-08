@@ -22,6 +22,25 @@ export interface ProductProfile {
   /** False = consumer product; companies only qualify as partnership targets, and content/SEO carries the weight. */
   outboundViable: boolean;
   seoCta: string;
+  /**
+   * Where SEO topics come from for this product.
+   *
+   * "community" — mined from CommunityMention rows (Reddit/HN/IH scans). Works
+   *   for products whose buyers complain in public forums we scan.
+   * "catalog"   — generated from the product's own live tool pages + ICP text.
+   *   Self-serve, long-tail products (Data, Web) have no forum constituency:
+   *   nobody posts "my OFX won't open in Excel" on Hacker News, they just
+   *   Google it. Mining community data for them yielded zero topics for
+   *   ~4 days, so their topics are derived from real pages instead.
+   */
+  topicSourcing: "community" | "catalog";
+  /**
+   * Catalog products only: sitemap path prefixes that identify real, working
+   * tool pages. Topics are generated ONLY against pages fetched live from the
+   * product's sitemap and matching one of these, so an article can never
+   * promote a tool that doesn't exist.
+   */
+  catalogSurfacePrefixes?: string[];
 }
 
 export const PRODUCTS: Record<MarketedProduct, ProductProfile> = {
@@ -58,6 +77,7 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
     ],
     outboundViable: true,
     seoCta: "Start your free trial at trust.korrali.com",
+    topicSourcing: "community",
   },
 
   REVENUE: {
@@ -115,6 +135,7 @@ ALWAYS REJECT — these are competitors or non-buyers for Revenue:
     ],
     outboundViable: true,
     seoCta: "See your revenue health for free at revenue.korrali.com",
+    topicSourcing: "community",
   },
 
   DATA: {
@@ -135,6 +156,8 @@ ALWAYS REJECT as topics: generic "best accounting software" or "bookkeeping tips
     // Self-serve SEO/organic product, no sales motion — content only, no cold outreach.
     outboundViable: false,
     seoCta: "Convert or check your file free at data.korrali.com",
+    topicSourcing: "catalog",
+    catalogSurfacePrefixes: ["/tools/", "/banks/"],
   },
 
   WEB: {
@@ -155,6 +178,8 @@ ALWAYS REJECT as topics: generic "SEO tips" or "website design" content with no 
     // Self-serve SEO/organic product, no sales motion — content only, no cold outreach.
     outboundViable: false,
     seoCta: "Check your website free at web.korrali.com",
+    topicSourcing: "catalog",
+    catalogSurfacePrefixes: ["/checkers/"],
   },
 
   BILLCLEAR: {
@@ -186,6 +211,7 @@ ALWAYS REJECT: non-US companies (the product leans on US billing rules like the 
     // 2026-07-07 portfolio freeze: BillClear is maintenance-only; no outbound.
     outboundViable: false,
     seoCta: "Audit any medical bill in 60 seconds at getbillclear.app",
+    topicSourcing: "community",
   },
 
   MEDSCAN: {
@@ -211,6 +237,7 @@ ALWAYS REJECT: ordinary B2B SaaS companies (no reason to care about medicine sca
     ],
     outboundViable: false,
     seoCta: "Scan any medicine free with MedScan — medscan.app",
+    topicSourcing: "community",
   },
 
   GROWTH_SERVICE: {
@@ -232,6 +259,7 @@ ALWAYS REJECT: companies with a sales team (AE/SDR job titles visible on LinkedI
     // 2026-07-07: DFY SDR service sunset; Growth is internal-only. No outbound.
     outboundViable: false,
     seoCta: "Book a 15-min demo at korrali.com",
+    topicSourcing: "community",
   },
 };
 

@@ -419,11 +419,43 @@ async function main() {
     if (topics.length === 0) topics = await analyzeSeoTopics();
 
     const existing = await prisma.contentDraft.findMany({
-      where: { type: ContentType.BLOG_POST, targetKeyword: { not: null } },
-      select: { targetKeyword: true },
+      where: { type: ContentType.BLOG_POST },
+      select: { targetKeyword: true, product: true, status: true },
     });
-    const covered = new Set(existing.map((e) => e.targetKeyword));
-    const todo = topics.filter((t) => !covered.has(t.targetKeyword)).slice(0, 3);
+    const covered = new Set(existing.map((e) => e.targetKeyword).filter(Boolean));
+
+    // How many articles each product has actually shipped — drives who picks first.
+    const published = new Map<string, number>();
+    for (const e of existing) {
+      if (e.status !== "posted" || !e.product) continue;
+      published.set(e.product, (published.get(e.product) ?? 0) + 1);
+    }
+
+    // Round-robin across products instead of taking the global top 3. A flat
+    // slice let Trust/Revenue topics occupy every slot indefinitely, which is
+    // how Data and Web stayed at zero articles after being onboarded — the
+    // backlog never emptied, so their topics were never reached.
+    const buckets = new Map<string, CachedTopic[]>();
+    for (const t of topics) {
+      if (covered.has(t.targetKeyword)) continue;
+      const bucket = buckets.get(t.product) ?? [];
+      bucket.push(t);
+      buckets.set(t.product, bucket);
+    }
+    const order = [...buckets.keys()].sort(
+      (a, b) => (published.get(a) ?? 0) - (published.get(b) ?? 0) || a.localeCompare(b),
+    );
+
+    const todo: CachedTopic[] = [];
+    while (todo.length < 3) {
+      const before = todo.length;
+      for (const product of order) {
+        if (todo.length >= 3) break;
+        const next = buckets.get(product)?.shift();
+        if (next) todo.push(next);
+      }
+      if (todo.length === before) break; // every bucket drained
+    }
 
     for (const topic of todo) {
       try {

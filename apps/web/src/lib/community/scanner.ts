@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { scoreCommunityMention } from "@/lib/ai/community-intent-scorer";
 import { searchSubreddit } from "@/lib/reddit/client";
+import type { MarketedProduct } from "@/lib/products";
 import { CommunitySource } from "@prisma/client";
 
 // ─── Scan targets ────────────────────────────────────────────────────────────
@@ -15,23 +16,48 @@ import { CommunitySource } from "@prisma/client";
 interface RedditTarget {
   subreddit: string;
   keyword: string; // search terms sent to Reddit's own search API
+  /**
+   * Which product this target listens for. CommunityMention itself has no
+   * product column, so this tag is the only way to route scraped posts back to
+   * a product — the SEO topic analyzer uses it to pull the phrasing real people
+   * use for a given product's problems.
+   */
+  product: MarketedProduct;
 }
 
 // Subreddit-scoped searches using Reddit's native /r/{sub}/search.json endpoint.
 const REDDIT_TARGETS: RedditTarget[] = [
   // Trust ICP
-  { subreddit: "SaaS",                    keyword: '"security questionnaire"' },
-  { subreddit: "SaaS",                    keyword: '"SOC 2" startup' },
-  { subreddit: "startups",               keyword: '"compliance" enterprise B2B' },
-  { subreddit: "startups",               keyword: '"security review" SaaS' },
+  { subreddit: "SaaS",                   product: "TRUST",   keyword: '"security questionnaire"' },
+  { subreddit: "SaaS",                   product: "TRUST",   keyword: '"SOC 2" startup' },
+  { subreddit: "startups",               product: "TRUST",   keyword: '"compliance" enterprise B2B' },
+  { subreddit: "startups",               product: "TRUST",   keyword: '"security review" SaaS' },
   // Revenue ICP
-  { subreddit: "stripe",                 keyword: '"failed payments" SaaS' },
-  { subreddit: "SaaS",                   keyword: '"Stripe" billing subscription problem' },
-  { subreddit: "startups",               keyword: '"failed payments" subscription startup' },
-  { subreddit: "EntrepreneurRideAlong",  keyword: '"billing" Stripe subscription' },
-  { subreddit: "SaaS",                   keyword: '"vendor review" enterprise' },
-  { subreddit: "stripe",                 keyword: '"billing issue" subscription' },
+  { subreddit: "stripe",                 product: "REVENUE", keyword: '"failed payments" SaaS' },
+  { subreddit: "SaaS",                   product: "REVENUE", keyword: '"Stripe" billing subscription problem' },
+  { subreddit: "startups",               product: "REVENUE", keyword: '"failed payments" subscription startup' },
+  { subreddit: "EntrepreneurRideAlong",  product: "REVENUE", keyword: '"billing" Stripe subscription' },
+  { subreddit: "SaaS",                   product: "TRUST",   keyword: '"vendor review" enterprise' },
+  { subreddit: "stripe",                 product: "REVENUE", keyword: '"billing issue" subscription' },
+  // Data ICP — file-format and import pain, not general bookkeeping chat.
+  { subreddit: "QuickBooks",             product: "DATA",    keyword: '"CSV" import error' },
+  { subreddit: "Bookkeeping",            product: "DATA",    keyword: '"bank statement" CSV convert' },
+  { subreddit: "xero",                   product: "DATA",    keyword: '"bank feed" CSV format' },
+  { subreddit: "Accounting",             product: "DATA",    keyword: '"OFX" OR "QIF" convert' },
+  // Web ICP — deterministic diagnostics the scanner actually runs.
+  { subreddit: "webdev",                 product: "WEB",     keyword: '"security headers" check' },
+  { subreddit: "webdev",                 product: "WEB",     keyword: '"redirect loop" OR "redirect chain"' },
+  { subreddit: "TechSEO",                product: "WEB",     keyword: '"broken links" OR "meta tags" audit' },
+  { subreddit: "webhosting",             product: "WEB",     keyword: '"SSL certificate" expired OR error' },
 ];
+
+/**
+ * Subreddits scanned on a given product's behalf. Used by the SEO topic
+ * analyzer to pull real-world phrasing for that product's problem space.
+ */
+export function subredditsForProduct(product: MarketedProduct): string[] {
+  return [...new Set(REDDIT_TARGETS.filter((t) => t.product === product).map((t) => t.subreddit))];
+}
 
 interface TavilyTarget {
   source: CommunitySource;

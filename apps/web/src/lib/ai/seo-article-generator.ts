@@ -54,7 +54,13 @@ Title: ${topic.suggestedTitle}
 Search intent: ${topic.searchIntent}
 Product to mention: ${ctx.name} — ${ctx.oneLiner}
 Audience: ${ctx.buyers}
-CTA line: ${ctx.seoCta}
+CTA line: ${ctx.seoCta}${
+          topic.landingPath
+            ? `
+Link the CTA to this exact page, which solves the problem the article describes: ${ctx.url}${topic.landingPath}
+Do not link to any other page on the product site, and do not invent tool names beyond what this page offers.`
+            : ""
+        }
 
 Write the complete article in Markdown now. Start directly with the H1.`,
       },
