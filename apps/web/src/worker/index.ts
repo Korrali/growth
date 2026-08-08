@@ -416,7 +416,25 @@ async function main() {
     if (cache?.body) {
       try { topics = JSON.parse(cache.body) as CachedTopic[]; } catch { /* fall through */ }
     }
-    if (topics.length === 0) topics = await analyzeSeoTopics();
+
+    // A cache written before a product was onboarded would otherwise starve
+    // that product until the next weekly refresh — which is how Data and Web
+    // could still publish nothing on the first run after being wired up.
+    // Treat "no topics at all for a product that should always yield some" as
+    // stale, not as a legitimate empty result.
+    const { PRODUCTS, MARKETED_PRODUCT_KEYS } = await import("@/lib/products");
+    const alwaysExpected = MARKETED_PRODUCT_KEYS.filter((k) => PRODUCTS[k].topicSourcing === "catalog");
+    const missing = alwaysExpected.filter((k) => !topics.some((t) => t.product === k));
+    if (topics.length === 0 || missing.length > 0) {
+      if (missing.length > 0) {
+        console.log(`[cron] seo-auto-publish: topic cache missing ${missing.join(",")} — refreshing`);
+      }
+      topics = await analyzeSeoTopics();
+      await prisma.contentDraft.update({
+        where: { slug: "__seo_topics__" },
+        data: { body: JSON.stringify(topics) },
+      }).catch(() => { /* cache row may not exist yet; refresh cron will create it */ });
+    }
 
     const existing = await prisma.contentDraft.findMany({
       where: { type: ContentType.BLOG_POST },
