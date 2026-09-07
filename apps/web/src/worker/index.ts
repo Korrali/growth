@@ -17,6 +17,7 @@ import { runCommunityScan } from "@/lib/community/scanner";
 import { buildLinkedInDraft } from "@/lib/linkedin/draft-builder";
 import { processVisitor } from "@/lib/visitor/processor";
 import { runAutoEnroll } from "@/lib/enroll/auto-enroll";
+import { SEO_TOPIC_CACHE_SLUG } from "@/lib/content-slugs";
 import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
@@ -366,16 +367,18 @@ async function main() {
     const topics = await analyzeSeoTopics();
     if (topics.length === 0) return;
     await prisma.contentDraft.upsert({
-      where: { slug: "__seo_topics__" },
+      where: { slug: SEO_TOPIC_CACHE_SLUG },
       create: {
         type: ContentType.BLOG_POST,
-        slug: "__seo_topics__",
+        slug: SEO_TOPIC_CACHE_SLUG,
         title: "SEO Topic Cache",
         body: JSON.stringify(topics),
         status: "draft",
         product: "TRUST",
       },
-      update: { body: JSON.stringify(topics) },
+      // Force status back to "draft" — a bulk publish once flipped this row to
+      // "posted" and it went live as a public blog post.
+      update: { body: JSON.stringify(topics), status: "draft" },
     });
     console.log(`[cron] seo-topic-refresh: cached ${topics.length} topics`);
   });
@@ -412,7 +415,7 @@ async function main() {
 
     type CachedTopic = Awaited<ReturnType<typeof analyzeSeoTopics>>[number];
     let topics: CachedTopic[] = [];
-    const cache = await prisma.contentDraft.findUnique({ where: { slug: "__seo_topics__" } });
+    const cache = await prisma.contentDraft.findUnique({ where: { slug: SEO_TOPIC_CACHE_SLUG } });
     if (cache?.body) {
       try { topics = JSON.parse(cache.body) as CachedTopic[]; } catch { /* fall through */ }
     }
@@ -431,8 +434,8 @@ async function main() {
       }
       topics = await analyzeSeoTopics();
       await prisma.contentDraft.update({
-        where: { slug: "__seo_topics__" },
-        data: { body: JSON.stringify(topics) },
+        where: { slug: SEO_TOPIC_CACHE_SLUG },
+        data: { body: JSON.stringify(topics), status: "draft" },
       }).catch(() => { /* cache row may not exist yet; refresh cron will create it */ });
     }
 

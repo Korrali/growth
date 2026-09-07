@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ContentType } from "@prisma/client";
 import { MARKETED_PRODUCT_KEYS, type MarketedProduct } from "@/lib/products";
+import { RESERVED_SLUG_PREFIX } from "@/lib/content-slugs";
 
 // GET /api/blog?product=TRUST|REVENUE|BILLCLEAR|MEDSCAN
 // Public endpoint — consumed by each product's /blog page
@@ -15,7 +16,12 @@ export async function GET(req: NextRequest) {
   }
 
   const articles = await prisma.contentDraft.findMany({
-    where: { type: ContentType.BLOG_POST, product, status: "posted" },
+    where: {
+      type: ContentType.BLOG_POST,
+      product,
+      status: "posted",
+      slug: { not: { startsWith: RESERVED_SLUG_PREFIX } },
+    },
     select: {
       id: true, slug: true, title: true, metaDescription: true,
       targetKeyword: true, postedAt: true, createdAt: true,
