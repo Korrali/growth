@@ -4,11 +4,10 @@
 
 ## Final state (what's actually running)
 - **Sending domain:** getkorrali.com, verified in the dedicated free Resend account (login: ashish.bhagat@getkorrali.com). Send-only restricted key deployed to all Growth envs (least privilege); the full-access key is used only for domain admin.
-- **From:** `The Korrali Team <outreach@getkorrali.com>` · Reply-To falls back to the same address (receives via Google). System/auth emails: `system@getkorrali.com`.
-  - **2026-08-05 change:** from-address moved off the founder's personal `ashish@getkorrali.com` to `outreach@getkorrali.com`. **Manual follow-up still needed:** confirm `outreach@getkorrali.com` is added as a mailbox/alias in Google Workspace (or forwarded via Cloudflare Email Routing) before flipping `GROWTH_FROM_EMAIL` on EC2 — otherwise replies to the new address will bounce. Until that's confirmed, EC2 `.env.production`/`.env.uat` still have the old value.
+- **From:** `Ashish from Korrali <ashish@getkorrali.com>` · Reply-To falls back to the same address (receives via Google). System/auth emails: `system@getkorrali.com`.
 - **Env flips done** (local `.env` + EC2 `.env.production` + `.env.uat`, backups `*.bak-20260707`, pm2 restarted): new `RESEND_API_KEY`, `GROWTH_FROM_EMAIL`, `EMAIL_FROM`, `RESEND_INBOUND_DOMAIN=` (empty — the old prod value `korrali.com` was generating dead `reply+…@korrali.com` Reply-To addresses; replies were bouncing), `MAX_SENDS_PER_DAY=10` (warming).
 - **DNS verified at public resolvers:** Resend DKIM, send-subdomain SPF + MX, DMARC `p=quarantine` (single record — the conflicting parked `p=reject` was deleted). Root korrali.com untouched: transactional only, forever.
-- **End-to-end test send:** delivered from outreach@getkorrali.com via the send-only key (Resend id `2866598f`).
+- **End-to-end test send:** delivered from ashish@getkorrali.com via the send-only key (Resend id `2866598f`).
 - **Raise `MAX_SENDS_PER_DAY` per the warming schedule below** (10 → 20 → 30 → 50), conditions-gated, via the same env edit + pm2 restart.
 
 ## What the audit found
@@ -33,9 +32,9 @@ Founder can't spend on Resend Pro. New plan — **getkorrali.com** (already owne
 - ✅ DMARC fixed: parked `p=reject` record deleted (was an invalid duplicate); `p=quarantine` live.
 - ✅ Setup script updated: defaults to getkorrali.com / zone `1838dead...`; re-registering will rotate the stale DKIM automatically (upsert).
 
-**The ONE founder action ($0, ~2 min):** create a new free Resend account (e.g. sign up with bhagat.ashish.a+outreach@gmail.com), create a full-access API key, paste it to Claude. Claude then runs `infra/setup-outreach-domain.py`, verifies the domain, flips Growth env (`GROWTH_FROM_EMAIL=outreach@getkorrali.com`, new `RESEND_API_KEY` — Growth only; Trust/Revenue keep the original account) locally + on EC2, and warming starts at 10/day.
+**The ONE founder action ($0, ~2 min):** create a new free Resend account (e.g. sign up with bhagat.ashish.a+outreach@gmail.com), create a full-access API key, paste it to Claude. Claude then runs `infra/setup-outreach-domain.py`, verifies the domain, flips Growth env (`GROWTH_FROM_EMAIL=ashish@getkorrali.com`, new `RESEND_API_KEY` — Growth only; Trust/Revenue keep the original account) locally + on EC2, and warming starts at 10/day.
 
-**Open check — reply reception:** root MX points to `smtp.google.com`. If getkorrali.com is NOT added as a secondary domain in Google Workspace, replies to outreach@getkorrali.com bounce. Confirm in Workspace admin, or Claude swaps root MX to Cloudflare Email Routing (free forward to Gmail — needs Email Routing enabled in the CF dashboard once, ~2 min; current API token lacks that permission).
+**Open check — reply reception:** root MX points to `smtp.google.com`. If getkorrali.com is NOT added as a secondary domain in Google Workspace, replies to ashish@getkorrali.com bounce. Confirm in Workspace admin, or Claude swaps root MX to Cloudflare Email Routing (free forward to Gmail — needs Email Routing enabled in the CF dashboard once, ~2 min; current API token lacks that permission).
 
 **Later, out of first revenue:** Resend Pro on the outbound account restores automated inbound reply parsing into Growth's inbox (the `reply.getkorrali.com → inbound.resend.com` MX is already in place for it). Until then, replies are handled in the founder's mailbox.
 

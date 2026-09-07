@@ -4,7 +4,7 @@ import { BULK_MODEL } from "@/lib/ai/models";
 import { ContentType } from "@prisma/client";
 
 const PROMPTS: Record<ContentType, string> = {
-  LINKEDIN_POST: `Write a LinkedIn post for Korrali's founder. Voice: founder sharing a specific operational insight. No fluffy intros. Start with the insight. 150-250 words. End with a subtle CTA or question. No emojis. No hashtag spam (max 2 relevant tags at end).`,
+  LINKEDIN_POST: `Write a LinkedIn post for Ashish, founder of Korrali. Voice: founder sharing a specific operational insight. No fluffy intros. Start with the insight. 150-250 words. End with a subtle CTA or question. No emojis. No hashtag spam (max 2 relevant tags at end).`,
 
   BLOG_OUTLINE: `Create a blog post outline for a Korrali blog post. Format: Title + 5-7 sections with 2-3 bullet sub-points each. Each section should have a clear angle. Include a hook intro and a "what to do next" conclusion.`,
 
@@ -14,7 +14,7 @@ const PROMPTS: Record<ContentType, string> = {
 
   EMAIL_TEMPLATE: `Write a cold email template. Format: subject line + body. Rules: under 120 words for body, founder-to-founder tone, one specific observation, one clear CTA. Include {{firstName}} and {{companyName}} tokens where appropriate.`,
 
-  X_THREAD: `Write a Twitter/X thread for Korrali's founder. Voice: practitioner sharing a hard-won lesson. Rules: 5-7 tweets. Tweet 1 = hook (< 280 chars, no "thread" or 🧵). Each tweet standalone-readable. End tweet: CTA to visit korrali.com. No emoji spam. No hashtags.`,
+  X_THREAD: `Write a Twitter/X thread for Ashish, founder of Korrali. Voice: practitioner sharing a hard-won lesson. Rules: 5-7 tweets. Tweet 1 = hook (< 280 chars, no "thread" or 🧵). Each tweet standalone-readable. End tweet: CTA to visit korrali.com. No emoji spam. No hashtags.`,
 
   REDDIT_POST: `Write a Reddit post for a founder community (r/SaaS or r/startups). Voice: transparent, non-promotional, genuinely helpful. Provide real value or start a real discussion. Under 300 words. Never mention Korrali directly. No product links. Tone must match sourceData.subreddit context. (Not used by scanner — for original posts only.)`,
 

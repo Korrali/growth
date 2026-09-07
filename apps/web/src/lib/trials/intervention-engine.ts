@@ -12,8 +12,8 @@ async function sendTrialEmail(
 ): Promise<void> {
   const brand = PRODUCTS[product].brand;
   const fromName = brand === "Korrali"
-    ? (process.env.GROWTH_FROM_NAME ?? "The Korrali Team")
-    : `The ${brand} Team`;
+    ? (process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali")
+    : `Ashish from ${brand}`;
   // EMAIL_FROM may be a bare address or a full "Name <email>" — extract the
   // bare address so we never produce a nested, invalid from field.
   const rawFrom = process.env.EMAIL_FROM ?? "growth@korrali.com";

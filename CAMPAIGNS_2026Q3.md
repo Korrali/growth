@@ -12,7 +12,7 @@ Two internal campaigns (no client, founder inbox). Values below map 1:1 to the c
 - dailyLimit: `10` (warming; raise per runbook schedule)
 - perDomainLimit: `1` · sendWindow: `8–18` · timezone: `America/New_York`
 - maxFollowUps: `3` · testMode: `true` · client: none
-- fromName: `The Korrali Team` · fromEmail: `outreach@getkorrali.com` (the verified cold-outbound domain — NOT the root korrali.com address; `outreach.korrali.com` was shelved, see DELIVERABILITY_RUNBOOK.md)
+- fromName: `Ashish from Korrali` · fromEmail: `ashish@getkorrali.com` (the verified cold-outbound domain — NOT the root korrali.com address; `outreach.korrali.com` was shelved, see DELIVERABILITY_RUNBOOK.md)
 
 **customIcpProfile** (paste verbatim):
 ```
@@ -49,7 +49,7 @@ Disqualify: companies with no AI in product, pure consumer apps, agencies.
 > Since enforcement started August 2, those sections are showing up in most vendor reviews we see. We built a free 2-minute self-check that maps where you'd get stuck: [AI Act readiness checker link]
 >
 > Worth a look before the next questionnaire lands?
-> — The Korrali Team
+> — Ashish
 
 *Step 2 (day 4):* short, pure value — "We pulled the AI questions from recent enterprise questionnaires. The 5 that stall deals most: …" (list 5, one line each). CTA: "Want the full list? Reply 'list'."
 
@@ -103,7 +103,7 @@ Disqualify: non-subscription businesses, non-Stripe billing, pre-revenue.
 > We built a free audit that shows it: read-only Stripe connect, your dollar figure in about 5 minutes, keep the report either way. [audit link]
 >
 > Curious what {{companyName}}'s number is?
-> — The Korrali Team
+> — Ashish
 
 *Step 2 (day 4):* benchmark value — "Across audits we've run, the median business finds [X]% of MRR recoverable. The three leaks that show up everywhere: expired cards nobody retried smartly, dunning emails that stop too early, failed upgrades that never completed." CTA: audit link again.
 

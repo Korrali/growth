@@ -2,7 +2,7 @@ import { anthropic } from "@/lib/ai/claude";
 import { HIGH_INTENT_MODEL } from "@/lib/ai/models";
 import { productCatalogueBlock } from "@/lib/products";
 
-const SYSTEM_PROMPT = `You are writing LinkedIn outreach copy for the founder of the product indicated by the contact's fitProduct.
+const SYSTEM_PROMPT = `You are writing LinkedIn outreach copy for Ashish, founder of the product indicated by the contact's fitProduct.
 
 ${productCatalogueBlock()}
 

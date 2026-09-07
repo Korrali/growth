@@ -16,7 +16,7 @@ Head to your Knowledge Base and paste in one fact about your infrastructure or d
 
 Once you have a few facts in, you can paste any questionnaire and watch the answers generate.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "You've added facts — try a questionnaire",
@@ -28,7 +28,7 @@ The next step is to paste a questionnaire. Even a single question works. Go to Q
 
 If you have a security questionnaire sitting in your inbox right now, that's the perfect test case.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "Your trust page is one step away",
@@ -38,7 +38,7 @@ A trust page gives enterprise buyers a public-facing signal that you take securi
 
 Head to Trust Page and publish. You can share the link directly from your next enterprise call.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "Getting the most out of Korrali Trust",
@@ -52,7 +52,7 @@ A few things Korrali Trust customers find most useful:
 
 Let me know if you hit any friction.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "Checking in on your questionnaire workflow",
@@ -62,7 +62,7 @@ Quick check-in — have you had a chance to run a real questionnaire through Kor
 
 If there's anything blocking you (questionnaire format, specific question types, integration needs), I'd like to know. Happy to jump on a quick call.
 
-The Korrali Team`,
+Ashish`,
   },
 ];
 
@@ -75,7 +75,7 @@ Welcome to Korrali Revenue Recovery. Connect your Stripe account and we'll start
 
 Takes about 2 minutes: go to Settings > Connect Stripe.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "What to look for in your first Stripe scan",
@@ -90,7 +90,7 @@ Once Stripe is connected, here's what we detect:
 
 The anomaly feed shows everything. CRITICAL anomalies are worth a same-day look.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "Recovery actions: what happens after detection",
@@ -100,7 +100,7 @@ When we find an anomaly, you can take a recovery action directly from the dashbo
 
 The goal is to close the gap between "detected" and "recovered" to under 24 hours.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "Getting your team set up on Revenue Recovery",
@@ -114,7 +114,7 @@ A few things that make Korrali Revenue more useful with more context:
 
 Let me know if the anomaly types don't match what you're seeing in Stripe.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "Checking in — how's the Stripe monitoring going?",
@@ -126,7 +126,7 @@ If your Stripe volume is relatively low or new, it may take a few days to build 
 
 If there's anything specific you wanted to detect that's not in the product yet, I'd like to hear it.
 
-The Korrali Team`,
+Ashish`,
   },
 ];
 
@@ -139,7 +139,7 @@ Welcome to BillClear. The fastest way to see value is to run one real medical bi
 
 Upload the bill (a phone photo works) and the audit comes back in under a minute: duplicate charges, upcoding, No Surprises Act violations, all itemised in dollars.
 
-The BillClear Team`,
+Ashish`,
   },
   {
     subject: "What the audit found — reading your first report",
@@ -151,7 +151,7 @@ The dispute letter is generated from those findings — it cites the specific co
 
 If your first bill came back clean, that's normal for ~half of bills. Try one from a hospital visit or ER — error rates there are much higher.
 
-The BillClear Team`,
+Ashish`,
   },
   {
     subject: "Rolling BillClear out to your employees",
@@ -161,7 +161,7 @@ The pilot works best when 5–10 employees run real bills through it in the firs
 
 I can set up a short intro note you can forward to your team. Want me to send it over?
 
-The BillClear Team`,
+Ashish`,
   },
   {
     subject: "Measuring what BillClear saves your plan",
@@ -175,7 +175,7 @@ A few things benefits teams find most useful in the dashboard:
 
 If you're self-funded, recovered billing errors flow straight back to your plan spend.
 
-The BillClear Team`,
+Ashish`,
   },
   {
     subject: "Checking in on your BillClear pilot",
@@ -185,7 +185,7 @@ Quick check-in — have your employees had a chance to run real bills through Bi
 
 If uptake is the blocker, the fix is usually a one-line mention in your benefits newsletter or Slack. Happy to draft it, or jump on a call about anything else in the way.
 
-The BillClear Team`,
+Ashish`,
   },
 ];
 
@@ -198,7 +198,7 @@ Thanks for exploring a MedScan partnership. The quickest way to evaluate it: sca
 
 That's the experience your users or patients would get from day one.
 
-The MedScan Team`,
+Ashish`,
   },
   {
     subject: "Where MedScan fits in your service",
@@ -208,7 +208,7 @@ Partners typically slot MedScan in at the moment of confusion: a caregiver sorti
 
 A recommendation from you at that moment is what drives adoption — and it costs your team nothing to support.
 
-The MedScan Team`,
+Ashish`,
   },
   {
     subject: "What a MedScan partnership looks like",
@@ -218,7 +218,7 @@ The simplest partnership is a recommendation: MedScan in your resource list, onb
 
 Worth a short call to figure out which shape makes sense?
 
-The MedScan Team`,
+Ashish`,
   },
   {
     subject: "Checking in on MedScan",
@@ -228,7 +228,7 @@ Quick check-in — did you get a chance to try the app with a few real medicine 
 
 If anything felt off for your user base (label data depth, interaction coverage, accessibility), that feedback directly shapes what we build next.
 
-The MedScan Team`,
+Ashish`,
   },
 ];
 
@@ -262,7 +262,7 @@ Reply to this email and I'll extend your trial a week — no card needed.
 
 If you're ready instead, the annual plans now include 2 months free.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "Closing the loop on Korrali",
@@ -272,7 +272,7 @@ I'll stop emailing after this one. Before I do: if Korrali Trust didn't fit, I'd
 
 And if the timing was just wrong, your knowledge base is still saved. Reply whenever an enterprise questionnaire lands in your inbox and I'll reactivate you the same day.
 
-The Korrali Team`,
+Ashish`,
   },
 ];
 
@@ -285,7 +285,7 @@ Your Korrali Revenue trial just ended. Whatever was leaking in your Stripe accou
 
 Reply and I'll extend you a week so you can see a full billing cycle of detection.
 
-The Korrali Team`,
+Ashish`,
   },
   {
     subject: "Closing the loop on Revenue monitoring",
@@ -295,7 +295,7 @@ Last email from me. If the anomalies we flagged during your trial didn't justify
 
 Reply whenever billing health makes it back up your list and I'll reactivate your account.
 
-The Korrali Team`,
+Ashish`,
   },
 ];
 
@@ -308,7 +308,7 @@ Your BillClear pilot just wrapped. If your employees didn't get many real bills 
 
 Reply and I'll extend the pilot two weeks — enough for one more payroll cycle of bills.
 
-The BillClear Team`,
+Ashish`,
   },
   {
     subject: "Closing the loop on BillClear",
@@ -318,7 +318,7 @@ Last note from me. If BillClear didn't earn a place in your benefits stack, I'd 
 
 If it's a budget-cycle thing, reply when your next benefits planning window opens and we'll pick the pilot back up.
 
-The BillClear Team`,
+Ashish`,
   },
 ];
 
@@ -331,7 +331,7 @@ Our partnership conversation went quiet — that's usually timing, not interest.
 
 Reply and we'll pick it up where we left off.
 
-The MedScan Team`,
+Ashish`,
   },
   {
     subject: "Closing the loop on MedScan",
@@ -339,7 +339,7 @@ The MedScan Team`,
 
 I'll close this thread after today. If a medication-safety integration isn't on your roadmap, no hard feelings — and if it comes back around next planning cycle, you know where to find me.
 
-The MedScan Team`,
+Ashish`,
   },
 ];
 
