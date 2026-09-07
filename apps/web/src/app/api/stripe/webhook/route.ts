@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
             contactEmail:        customerEmail,
             plan:                "SELF_SERVE",
             status:              "ACTIVE",
-            fromName:            process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali",
+            fromName:            process.env.GROWTH_FROM_NAME ?? "The Korrali Team",
             fromEmail:           process.env.GROWTH_FROM_EMAIL ?? "outreach@korrali.com",
             icpProfile:          "B2B SaaS founders, 2–20 employees, bootstrapped or seed-stage, no dedicated sales hire.",
             monthlyFeeUsd:       300,

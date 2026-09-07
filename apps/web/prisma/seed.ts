@@ -23,7 +23,7 @@ async function main() {
   // Founder org + user
   const user = await prisma.user.upsert({
     where: { email: founderEmail },
-    create: { email: founderEmail, name: "Ashish Bhagat" },
+    create: { email: founderEmail, name: "Founder" },
     update: {},
   });
 
@@ -70,7 +70,7 @@ async function main() {
         stepNumber: s.step,
         delayDays: s.delay,
         subjectTemplate: s.subject,
-        bodyTemplate: `Hi {{firstName}},\n\n[Step ${s.step} body — AI will personalize this for each contact.]\n\nAshish`,
+        bodyTemplate: `Hi {{firstName}},\n\n[Step ${s.step} body — AI will personalize this for each contact.]\n\nThe Korrali Team`,
         ctaType: s.cta,
       },
       update: {},
@@ -109,7 +109,7 @@ async function main() {
         stepNumber: s.step,
         delayDays: s.delay,
         subjectTemplate: s.subject,
-        bodyTemplate: `Hi {{firstName}},\n\n[Step ${s.step} body — AI will personalize this for each contact.]\n\nAshish`,
+        bodyTemplate: `Hi {{firstName}},\n\n[Step ${s.step} body — AI will personalize this for each contact.]\n\nThe Korrali Team`,
         ctaType: s.cta,
       },
       update: {},

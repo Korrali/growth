@@ -33,7 +33,7 @@ export function checkQualityGates(
 
 function systemPromptFor(product: CampaignProduct): string {
   const profile = PRODUCTS[product];
-  return `You are Ashish, founder of ${profile.brand}. Write cold outbound emails founder-to-founder.
+  return `You are the founder of ${profile.brand}. Write cold outbound emails founder-to-founder.
 
 The product you are selling: **${profile.name}** — ${profile.oneLiner}
 The buyer: ${profile.buyers}
