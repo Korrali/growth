@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ContentType } from "@prisma/client";
 import { MARKETED_PRODUCT_KEYS, type MarketedProduct } from "@/lib/products";
-import { RESERVED_SLUG_PREFIX } from "@/lib/content-slugs";
+import { isReservedSlug } from "@/lib/content-slugs";
 
 // GET /api/blog?product=TRUST|REVENUE|BILLCLEAR|MEDSCAN
 // Public endpoint — consumed by each product's /blog page
@@ -15,19 +15,20 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const articles = await prisma.contentDraft.findMany({
-    where: {
-      type: ContentType.BLOG_POST,
-      product,
-      status: "posted",
-      slug: { not: { startsWith: RESERVED_SLUG_PREFIX } },
-    },
+  const rows = await prisma.contentDraft.findMany({
+    where: { type: ContentType.BLOG_POST, product, status: "posted" },
     select: {
       id: true, slug: true, title: true, metaDescription: true,
       targetKeyword: true, postedAt: true, createdAt: true,
     },
     orderBy: { postedAt: "desc" },
   });
+
+  // Filter reserved slugs in JS, NOT in the query. "_" is a single-character
+  // wildcard in SQL LIKE, so Prisma's startsWith("__") compiles to
+  // `slug LIKE '__%'`, which matches every slug of 2+ characters — negating it
+  // returned zero articles and emptied all four product blogs in prod.
+  const articles = rows.filter((a) => !a.slug || !isReservedSlug(a.slug));
 
   return NextResponse.json(articles, {
     headers: {
