@@ -22,7 +22,7 @@ export async function sendAutoReply(classificationId: string): Promise<void> {
     ? originalSubject
     : `Re: ${originalSubject}`;
 
-  const fromName = process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali";
+  const fromName = process.env.GROWTH_FROM_NAME ?? "The Korrali Team";
   const fromEmail = process.env.GROWTH_FROM_EMAIL ?? "outreach@korrali.com";
   const inboundDomain = process.env.RESEND_INBOUND_DOMAIN ?? null;
   const outreachId = classification.message.outreachId;

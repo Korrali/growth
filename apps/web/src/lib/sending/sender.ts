@@ -250,10 +250,10 @@ export async function sendOutreachStep(
   const fromName = outreach.campaign.fromName
     ?? (() => {
       const product = PRODUCTS[outreach.campaign.product as keyof typeof PRODUCTS];
-      if (!product) return process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali";
+      if (!product) return process.env.GROWTH_FROM_NAME ?? "The Korrali Team";
       return product.brand === "Korrali"
-        ? (process.env.GROWTH_FROM_NAME ?? "Ashish from Korrali")
-        : `Ashish from ${product.brand}`;
+        ? (process.env.GROWTH_FROM_NAME ?? "The Korrali Team")
+        : `The ${product.brand} Team`;
     })();
   const fromEmail = outreach.campaign.fromEmail
     ?? process.env.GROWTH_FROM_EMAIL

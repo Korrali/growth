@@ -113,7 +113,7 @@ describe("extractOutreachId", () => {
   });
 
   it("returns null for an ordinary address with no outreach tag", () => {
-    expect(extractOutreachId({ to: ["ashish@getkorrali.com"] })).toBeNull();
+    expect(extractOutreachId({ to: ["outreach@getkorrali.com"] })).toBeNull();
   });
 
   it("returns null when there are no recipients at all", () => {

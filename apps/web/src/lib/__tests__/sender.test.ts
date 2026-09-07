@@ -92,7 +92,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("fetch", mockFetch);
   process.env.RESEND_API_KEY = "re_test_key";
-  process.env.GROWTH_FROM_NAME = "Ashish from Korrali";
+  process.env.GROWTH_FROM_NAME = "The Korrali Team";
   process.env.GROWTH_FROM_EMAIL = "outreach@korrali.com";
   process.env.RESEND_INBOUND_DOMAIN = "reply.outreach.korrali.com";
 
@@ -285,7 +285,7 @@ describe("sendOutreachStep — sender identity", () => {
   });
 
   it("falls back to GROWTH_FROM_NAME env var for Korrali brand", async () => {
-    process.env.GROWTH_FROM_NAME = "Ashish from Korrali";
+    process.env.GROWTH_FROM_NAME = "The Korrali Team";
     const { sendOutreachStep } = await importSender();
     await sendOutreachStep("out_1", 1);
 
