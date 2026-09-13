@@ -1,52 +1,106 @@
 import OpenAI from "openai";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Real Anthropic client — used for claude-* models when ANTHROPIC_API_KEY is
-// set. Unlike Groq's json_object mode (no schema enforcement — the source of
-// invalid-enum fit scores and reasoning/score contradictions), the Anthropic
-// API hard-enforces output_config json_schema.
-let _anthropic: Anthropic | null = null;
-function getRealAnthropic() {
-  if (!_anthropic) _anthropic = new Anthropic({ maxRetries: 3, timeout: 60_000 });
-  return _anthropic;
-}
+/**
+ * Growth is a free-tier-only product by explicit policy: no OpenAI, no
+ * Anthropic, ever — not as primary, not as fallback, not as a rescue tier.
+ * See MODEL_REGISTRY.md at the repo root. Every feature calls
+ * `anthropic.messages.create()` below (kept as the import name so none of the
+ * ~27 call sites need to change), which routes entirely across two free
+ * vendors: Groq (gpt-oss, then Llama) and Gemini.
+ */
 
-// Real OpenAI client — the runtime fallback when the primary provider call
-// (Claude, or Groq for HIGH_INTENT_MODEL-tier features) fails.
-let _openai: OpenAI | null = null;
-function getRealOpenAI() {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "", maxRetries: 3, timeout: 45_000 });
-  return _openai;
-}
-
-// Groq: OpenAI-compatible, free tier 14,400 req/day.
-// TPM: 6,000 for 70B (cheap model), 131,072 for 8B — well within cash-sprint volume.
-let _groq: OpenAI | null = null;
+// Groq: OpenAI-compatible, free tier 14,400 req/day per key. Two keys rotate
+// round-robin so one key's per-minute limit isn't the ceiling for the whole
+// product under load.
+const GROQ_KEYS = [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2].filter(
+  (k): k is string => Boolean(k),
+);
+let _groqClients: OpenAI[] | null = null;
+let _groqRR = 0;
 function getGroq() {
-  if (!_groq) _groq = new OpenAI({ apiKey: process.env.GROQ_API_KEY ?? "", baseURL: "https://api.groq.com/openai/v1", maxRetries: 3, timeout: 45_000 });
-  return _groq;
+  if (!_groqClients) {
+    const keys = GROQ_KEYS.length > 0 ? GROQ_KEYS : [""];
+    _groqClients = keys.map(
+      (apiKey) =>
+        new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1", maxRetries: 3, timeout: 45_000 }),
+    );
+  }
+  const client = _groqClients[_groqRR % _groqClients.length];
+  _groqRR++;
+  return client;
 }
 
+// Gemini: free tier, two keys rotate round-robin — same pattern as Groq.
+const GEMINI_KEYS = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2].filter(
+  (k): k is string => Boolean(k),
+);
+let _geminiKeyIdx = 0;
+function nextGeminiKey(): string {
+  if (GEMINI_KEYS.length === 0) return "";
+  const key = GEMINI_KEYS[_geminiKeyIdx % GEMINI_KEYS.length];
+  _geminiKeyIdx++;
+  return key;
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callGemini(model: string, params: any) {
+  const systemText = flattenSystem(params.system);
+  const userText = ((params.messages as Array<{ role: string; content: unknown }>) ?? [])
+    .map((m) => flattenContent(m.content))
+    .filter(Boolean)
+    .join("\n\n");
+  const needsJson = !!(params.output_config as { format?: unknown } | undefined)?.format;
+
+  const genAI = new GoogleGenerativeAI(nextGeminiKey());
+  const generativeModel = genAI.getGenerativeModel({
+    model,
+    ...(systemText ? { systemInstruction: systemText } : {}),
+    generationConfig: {
+      maxOutputTokens: (params.max_tokens as number) ?? 1024,
+      ...(needsJson ? { responseMimeType: "application/json" } : {}),
+    },
+  });
+  const result = await generativeModel.generateContent(userText);
+  const text = result.response.text();
+  return {
+    content: [{ type: "text" as const, text }],
+    usage: { input_tokens: 0, output_tokens: 0 },
+    model,
+    stop_reason: "end_turn" as const,
+  };
+}
+
+// Model tiers — all free (Groq gpt-oss), never a paid vendor. BULK is the
+// cheapest/highest-volume tier; WRITING/HIGH_INTENT are the larger tier for
+// customer-facing prose and high-value decisions.
 export const CLAUDE_MODELS = {
-  default: "llama-3.3-70b-versatile",
-  premium: "llama-3.3-70b-versatile",
-  cheap: "llama-3.1-8b-instant",      // 131K TPM — no throttle risk for email gen
+  default: "openai/gpt-oss-20b",
+  premium: "openai/gpt-oss-120b",
+  cheap: "openai/gpt-oss-20b",
 } as const;
 
 export type ClaudeModel = (typeof CLAUDE_MODELS)[keyof typeof CLAUDE_MODELS];
 
+// Groq model stays as-is (already gpt-oss or a valid Llama id) — this
+// function exists only to remap an unrecognized string to a safe default,
+// not to translate between vendors.
 function toGroqModel(model: string): string {
-  if (model.includes("haiku") || model.includes("8b-instant")) return "llama-3.1-8b-instant";
-  // llama-4-scout: 500K TPD (vs 70B's 100K) — mandatory switch to avoid TPD exhaustion on large prompts
-  return "meta-llama/llama-4-scout-17b-16e-instruct";
+  if (model === CLAUDE_MODELS.premium || model.includes("gpt-oss-120b")) return CLAUDE_MODELS.premium;
+  if (model.includes("8b-instant")) return "llama-3.1-8b-instant";
+  return CLAUDE_MODELS.default;
 }
 
-// Backup only: when Groq (primary) AND OpenAI both fail, retry on Claude Haiku —
-// the cheapest Claude tier, plenty for a rescue. The incoming model string is a
-// Groq/Llama id (BULK/WRITING/HIGH_INTENT all resolve to Llama), so it MUST be
-// remapped to a real Claude model id or the Anthropic call 404s.
-function toClaudeModel(_model: string): string {
-  return "claude-haiku-4-5";
+// Gemini rescue tier — a different vendor family from Groq's gpt-oss, so a
+// Groq-specific outage (expired key, quota) still recovers. flash for the
+// premium tier, flash-lite for everything else.
+function toGeminiModel(model: string): string {
+  return model === CLAUDE_MODELS.premium ? "gemini-3.6-flash" : "gemini-flash-lite-latest";
+}
+
+// Last-resort Groq rescue — a different model family (Llama, not gpt-oss) in
+// case gpt-oss itself is the bad rollout, not just the host.
+function toGroqRescueModel(model: string): string {
+  return model === CLAUDE_MODELS.premium ? "llama-3.3-70b-versatile" : "llama-3.1-8b-instant";
 }
 
 function flattenSystem(system: unknown): string {
@@ -158,13 +212,13 @@ async function callOpenAICompatible(
 // failure we open the breaker for a cooldown so later calls skip straight to a
 // working fallback, and we emit ONE loud, greppable alert per outage window
 // (grep `[ai][PROVIDER_DOWN]` in the pm2 error log) instead of a silent flood.
-type ProviderName = "anthropic" | "openai" | "groq";
+type ProviderName = "groq" | "gemini" | "groq-rescue";
 const HARD_COOLDOWN_MS = 15 * 60_000; // billing/auth — persistent until a human acts
 const SOFT_COOLDOWN_MS = 5 * 60_000; // rate limit / transient
 const breaker: Record<ProviderName, { downUntil: number; alertedAt: number }> = {
-  anthropic: { downUntil: 0, alertedAt: 0 },
-  openai: { downUntil: 0, alertedAt: 0 },
   groq: { downUntil: 0, alertedAt: 0 },
+  gemini: { downUntil: 0, alertedAt: 0 },
+  "groq-rescue": { downUntil: 0, alertedAt: 0 },
 };
 
 function errMessage(err: unknown): string {
@@ -185,38 +239,50 @@ function isHardProviderError(err: unknown): boolean {
 // credits / a revoked key / an exhausted quota — the exact failure that silently
 // starved the funnel on 2026-07-09. Sent via Resend, so the FROM address must be
 // on a Resend-verified domain (korrali.com) — NOT the getkorrali.com SES domain.
-const AI_ALERT_EMAIL = process.env.AI_ALERT_EMAIL ?? "ashish.bhagat@korrali.com";
+const AI_ALERT_EMAIL = process.env.AI_ALERT_EMAIL ?? process.env.MODEL_ALERT_EMAIL ?? "ashish.bhagat@korrali.com";
 const AI_ALERT_FROM = process.env.AI_ALERT_FROM ?? "Korrali Growth <growth@korrali.com>";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // Fire-and-forget founder alert on a provider outage. Called only from inside
 // markProviderDown's one-alert-per-cooldown-window guard, so during an outage
-// it sends at most ~1 email per provider per window (5 min soft / 15 min hard) —
+// it sends at most ~1 alert per provider per window (5 min soft / 15 min hard) —
 // no flood. Never awaited and never throws: the AI hot path must not block or
-// break on a mail failure.
-function emailProviderDownAlert(name: ProviderName, hard: boolean, detail: string): void {
+// break on a notification failure. Telegram (fast) + email (durable) — both
+// soft-fail if unconfigured.
+function providerDownAlert(name: ProviderName, hard: boolean, detail: string): void {
+  const message = [
+    `[Growth AI] ${name} provider DOWN — ${hard ? "HARD, needs action" : "transient"}`,
+    ``,
+    `Class: ${hard ? "HARD — will keep failing until a human acts (expired credits, revoked/invalid API key, or exhausted quota)" : "soft/transient (rate limit or network blip)"}`,
+    `Error: ${detail}`,
+    ``,
+    hard
+      ? `Action needed: top up or fix the ${name} account/key. The engine has fallen back to the next free-tier provider in the chain (Groq gpt-oss -> Gemini -> Groq llama), but this tier won't recover on its own.`
+      : `Usually self-heals after the cooldown — monitoring only, no action expected.`,
+  ].join("\n");
+
+  if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
+    void fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message }),
+    }).catch((e) => console.error("[ai] provider-down telegram alert failed to send", e));
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return;
-  const body = {
-    from: AI_ALERT_FROM,
-    to: [AI_ALERT_EMAIL],
-    subject: `[Growth AI] ${name} provider DOWN — ${hard ? "HARD, needs action" : "transient"}`,
-    text: [
-      `A model provider in the Growth engine just failed and its circuit breaker opened.`,
-      ``,
-      `Provider: ${name}`,
-      `Class:    ${hard ? "HARD — will keep failing until a human acts (expired credits, revoked/invalid API key, or exhausted quota)" : "soft/transient (rate limit or network blip)"}`,
-      `Error:    ${detail}`,
-      ``,
-      hard
-        ? `Action needed: top up or fix the ${name} account/key. The engine has fallen back to the next provider in the chain (Groq → OpenAI → Claude), but the primary free path won't recover on its own.`
-        : `Usually self-heals after the cooldown — monitoring only, no action expected.`,
-    ].join("\n"),
-  };
-  void fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }).catch((e) => console.error("[ai] provider-down alert email failed to send", e));
+  if (apiKey) {
+    void fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: AI_ALERT_FROM,
+        to: [AI_ALERT_EMAIL],
+        subject: `[Growth AI] ${name} provider DOWN — ${hard ? "HARD, needs action" : "transient"}`,
+        text: message,
+      }),
+    }).catch((e) => console.error("[ai] provider-down alert email failed to send", e));
+  }
 }
 
 function markProviderDown(name: ProviderName, err: unknown): void {
@@ -230,9 +296,9 @@ function markProviderDown(name: ProviderName, err: unknown): void {
     console.error(
       `[ai][PROVIDER_DOWN] ${name} ${hard ? "HARD (billing/auth/quota — needs a human)" : "soft (transient)"}: ${errMessage(err)}`,
     );
-    // Email the founder too — console alerts went unseen for 685 failed calls
+    // Notify the founder too — console alerts went unseen for 685 failed calls
     // on 2026-07-09. Inherits the guard above, so it's deduped to 1/window.
-    emailProviderDownAlert(name, hard, errMessage(err));
+    providerDownAlert(name, hard, errMessage(err));
   }
 }
 
@@ -247,18 +313,17 @@ function markProviderUp(name: ProviderName): void {
   }
 }
 
-// Anthropic-shaped client. Every feature in this codebase calls
-// anthropic.messages.create() directly (no shared generateText() wrapper),
-// so this is the single place resilience needs to live for all of them.
+// Anthropic-shaped client — kept as the import name `anthropic` purely so
+// none of the ~27 existing call sites need to change. It never touches the
+// Anthropic API. Every feature calls `anthropic.messages.create()` directly
+// (no shared generateText() wrapper), so this is the single place resilience
+// lives for all of them.
 //
-// Every feature runs Groq-first (the model slots all resolve to Llama ids):
-//   Groq (primary, free) -> OpenAI gpt-4o-mini -> Claude Haiku (final).
-// A request that explicitly asks for a claude-* model instead runs:
-//   Claude (primary) -> OpenAI gpt-4o-mini -> Groq (final).
-// OpenAI and Claude are BACKUP ONLY — present in the chain solely so a Groq
-// outage (expired key/quota) degrades gracefully instead of starving the funnel.
-// Each is included only when its API key is set. A provider whose breaker is
-// open is skipped for its cooldown window.
+// Growth is free-tier-only by explicit policy — no OpenAI, no Anthropic, at
+// any tier: Groq gpt-oss (primary, free) -> Gemini (free, different vendor
+// family) -> Groq Llama (free, different model family from gpt-oss). See
+// MODEL_REGISTRY.md. A provider whose breaker is open is skipped for its
+// cooldown window.
 export const anthropic = {
   messages: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -275,36 +340,16 @@ export const anthropic = {
         };
       }
 
-      const hasOpenAI = !!process.env.OPENAI_API_KEY;
-      const wantsClaude =
-        !!process.env.ANTHROPIC_API_KEY &&
-        typeof params.model === "string" &&
-        params.model.startsWith("claude");
+      const model = (params.model as string) ?? CLAUDE_MODELS.default;
 
-      // Ordered provider attempts for this call. claude-* → Anthropic first;
-      // everything else → Groq first. OpenAI is only in the chain when keyed.
-      // Order is preserved from the original chain (see claude-fallback.test.ts).
-      // No return-type annotation on `run`: let TS infer the same response union
-      // the original inline returns produced, so callers keep their `.content` types.
-      const attempts = wantsClaude
-        ? [
-            { name: "anthropic" as const, run: () => getRealAnthropic().messages.create(params) },
-            ...(hasOpenAI
-              ? [{ name: "openai" as const, run: () => callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params) }]
-              : []),
-            { name: "groq" as const, run: () => callOpenAICompatible(getGroq(), toGroqModel(params.model as string), params) },
-          ]
-        : [
-            { name: "groq" as const, run: () => callOpenAICompatible(getGroq(), toGroqModel((params.model as string) ?? CLAUDE_MODELS.default), params) },
-            ...(hasOpenAI
-              ? [{ name: "openai" as const, run: () => callOpenAICompatible(getRealOpenAI(), "gpt-4o-mini", params) }]
-              : []),
-            // Final backup: Claude Haiku. The model string is a Llama id, so it
-            // must be remapped or Anthropic 404s. Only when ANTHROPIC_API_KEY is set.
-            ...(process.env.ANTHROPIC_API_KEY
-              ? [{ name: "anthropic" as const, run: () => getRealAnthropic().messages.create({ ...params, model: toClaudeModel(params.model as string) }) }]
-              : []),
-          ];
+      // No return-type annotation on `run`: let TS infer the same response
+      // union the original inline returns produced, so callers keep their
+      // `.content` types.
+      const attempts = [
+        { name: "groq" as const, run: () => callOpenAICompatible(getGroq(), toGroqModel(model), params) },
+        { name: "gemini" as const, run: () => callGemini(toGeminiModel(model), params) },
+        { name: "groq-rescue" as const, run: () => callOpenAICompatible(getGroq(), toGroqRescueModel(model), params) },
+      ];
 
       let lastErr: unknown = new Error("no AI provider configured");
       let anyAttempted = false;
