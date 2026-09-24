@@ -25,20 +25,22 @@ jobs are answering replies, LinkedIn, and install walkthroughs.
 
 ### 1. Mailbox app password (5 min)
 
-For the Workspace user `ashish@getkorrali.com` (cold mail is sent as this address):
+For the Workspace user `ashish.bhagat@getkorrali.com` (`ashish@getkorrali.com` is its alias; cold mail is sent as the alias and replies to it land in this inbox):
 
 1. Admin console → Security → Authentication → 2-Step Verification → allow users to turn it on.
 2. Sign in as that user → myaccount.google.com → Security → turn on 2-Step Verification.
 3. myaccount.google.com/apppasswords → create one named "Growth" → copy the 16 characters.
 4. Gmail → Settings → Forwarding and POP/IMAP → IMAP enabled.
+5. Gmail → Settings → Accounts → "Send mail as" → add `ashish@getkorrali.com` (Treat as an alias).
+   Without this Gmail rewrites the From line to the login address.
 
 ### 2. Server env (`~/growth/.env.production`)
 
 ```
-GMAIL_USER=ashish@getkorrali.com        # the login from step 1
+GMAIL_USER=ashish.bhagat@getkorrali.com # the login from step 1
 GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 GROWTH_FROM_NAME=Ashish Bhagat            # a person, not "The Korrali Team" — emails are signed "Ashish"
-GROWTH_FROM_EMAIL=ashish@getkorrali.com   # same as GMAIL_USER, so no send-as alias is needed
+GROWTH_FROM_EMAIL=ashish@getkorrali.com   # alias of GMAIL_USER (needs step 5)
 FOUNDER_EMAIL=bhagat.ashish.a@gmail.com
 MAX_SENDS_PER_DAY=30
 ```
