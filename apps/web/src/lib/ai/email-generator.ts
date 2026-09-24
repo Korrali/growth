@@ -3,6 +3,7 @@ import { anthropic } from "@/lib/ai/claude";
 import { WRITING_MODEL } from "@/lib/ai/models";
 import { PRODUCTS } from "@/lib/products";
 import { reviewWithCritics } from "@/lib/ai/critics-reviewer";
+import { signOffRule } from "@/lib/sending/sender-identity";
 import type { CampaignProduct } from "@prisma/client";
 
 export interface GeneratedStep {
@@ -63,6 +64,7 @@ PERSONALIZATION (Pattern-Matcher):
 VOICE & FORMAT:
 - Direct, specific, human, founder-to-founder. One genuine observation per email. Each step builds narratively on the last.
 - Subject lines: lowercase, punchy, 4-7 words max. No clickbait, no "quick question".
+${signOffRule()}
 
 ${profile.outboundOffer ? `THE OFFER (every step builds toward this one ask):
 - ${profile.outboundOffer.offer}

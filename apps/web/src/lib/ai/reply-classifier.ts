@@ -6,6 +6,7 @@ import { addEmailSuppression } from "@/lib/sending/suppression";
 import { enqueueReplyAutoSend } from "@/lib/queue";
 import { sendMail } from "@/lib/mail/transport";
 import { PRODUCTS, type MarketedProduct } from "@/lib/products";
+import { signOffRule } from "@/lib/sending/sender-identity";
 
 const AUTO_SEND_DELAY_HOURS = 2;
 
@@ -82,7 +83,7 @@ export async function classifyReply(messageId: string) {
   const response = await anthropic.messages.create({
     model: BULK_MODEL,
     max_tokens: 256,
-    system: SYSTEM_PROMPT,
+    system: [SYSTEM_PROMPT, signOffRule()].filter(Boolean).join("\n"),
     messages: [
       {
         role: "user",
