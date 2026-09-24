@@ -276,8 +276,9 @@ async function autoEnqueueOutreach(
   fitProduct: FitProduct,
 ): Promise<boolean> {
   // Find a standing active campaign for this product
-  // BOTH → prefer TRUST campaign; REJECT is already filtered upstream
-  const product = fitProduct === "BOTH" ? "TRUST" : (fitProduct as MarketedProduct);
+  // BOTH → REVENUE, matching auto-enroll.ts (Revenue is the priority product);
+  // REJECT is already filtered upstream.
+  const product = fitProduct === "BOTH" ? "REVENUE" : (fitProduct as MarketedProduct);
 
   // Belt-and-suspenders: findContactForCompany already skips discovery for
   // non-outbound-viable products, but this function can also be reached via

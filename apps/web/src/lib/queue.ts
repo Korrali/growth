@@ -30,6 +30,8 @@ export interface FitScorePayload {
   companyId: string;
   /** Restrict scoring to these products (see ScoreFitOptions). */
   products?: string[];
+  /** Re-score against these if the first scoring is not a fit (cross-use). */
+  fallbackProducts?: string[];
 }
 
 export interface EmailGeneratePayload {
@@ -109,7 +111,9 @@ export async function enqueueFitScore(
 ): Promise<string | null> {
   const boss = await getBoss();
   return boss.send(QUEUE_NAMES.FIT_SCORE, payload, {
-    singletonKey: `fit-score-${payload.companyId}`,
+    // Product set in the key: a fallback re-score is enqueued while the first
+    // scoring job is still active, and must not be deduped against it.
+    singletonKey: `fit-score-${payload.companyId}${payload.products?.length ? `-${payload.products.join("+")}` : ""}`,
     retryLimit: 2,
     retryDelay: 30,
     expireInSeconds: 10 * 60,

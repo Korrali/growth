@@ -11,8 +11,10 @@ import { normalizeDomain } from "@/lib/import/csv-parser";
 //  - decision-makers only (founder/CEO/owner/president or finance/RevOps) —
 //    the same buyer bar the send-eligibility gate enforces via isBuyer
 //  - no acquired companies or subsidiaries: their billing moved to a parent
-//  - one contact per company (the first qualifying row wins), matching
-//    auto-enroll's one-contact-per-company rule
+//  - one contact per company (the best-ranked title wins, see titleRank),
+//    matching auto-enroll's one-contact-per-company rule
+//  - product "ROUTE" sends Stripe-billing companies to Revenue and everyone
+//    else to Trust, so mixed lists are cross-used without double-booking
 
 export interface ApolloLead {
   email: string;
@@ -28,6 +30,8 @@ export interface ApolloLead {
   technologies: string[];
   description: string | null;
   country: string | null;
+  /** Product this lead is imported for (see routeProduct for ROUTE mode). */
+  product: string;
 }
 
 export type SkipReason =
@@ -68,6 +72,25 @@ export function relevantTechnologies(raw: string): string[] {
   return [...billing, ...rest].slice(0, MAX_TECHS);
 }
 
+/**
+ * ROUTE mode: a company that bills through Stripe is a Revenue prospect,
+ * anyone else a Trust prospect. Each company ends up in exactly one product.
+ */
+export function routeProduct(technologies: string): "REVENUE" | "TRUST" {
+  return /\bstripe\b/i.test(technologies) ? "REVENUE" : "TRUST";
+}
+
+// When a company has several contacts, keep the likeliest buyer: the founder
+// decides for both products at a small company; then the product's own owner.
+const TITLE_RANK: [RegExp, number][] = [
+  [/\b(founder|co-?founder|ceo|chief executive|owner|president)\b/i, 1],
+  [/\b(cfo|chief financial|finance|controller|revops|revenue operations|ciso|chief information security|security|compliance)\b/i, 2],
+  [/\b(cto|chief technology|chief technical)\b/i, 3],
+];
+export function titleRank(title: string): number {
+  return TITLE_RANK.find(([re]) => re.test(title))?.[1] ?? 4;
+}
+
 export function isBuyerTitle(title: string, product = "REVENUE"): boolean {
   return (BUYER_TITLES[product] ?? BUYER_TITLES.REVENUE!).test(title);
 }
@@ -102,16 +125,21 @@ export function parseApolloCsv(
   };
 
   const seenEmails = new Set([...existingEmails].map((e) => e.toLowerCase()));
-  const seenDomains = new Set<string>();
-  const leads: ApolloLead[] = [];
+  const byDomain = new Map<string, ApolloLead>();
 
   for (const row of data) {
     const email = col(row, "Email").toLowerCase();
     if (!email) { skip("no_email"); continue; }
     if (col(row, "Email Status").toLowerCase() !== "verified") { skip("email_not_verified"); continue; }
 
+    const technologies = col(row, "Technologies");
+    const leadProduct = product === "ROUTE" ? routeProduct(technologies) : product;
+    // Routed to Revenue by Stripe usage, a CTO still owns the Stripe
+    // integration, so Revenue also accepts Trust's technical titles there.
     const title = col(row, "Title");
-    if (!isBuyerTitle(title, product)) { skip("not_decision_maker"); continue; }
+    const buyer = isBuyerTitle(title, leadProduct) ||
+      (product === "ROUTE" && leadProduct === "REVENUE" && isBuyerTitle(title, "TRUST"));
+    if (!buyer) { skip("not_decision_maker"); continue; }
 
     const companyName = col(row, "Company Name");
     if (ACQUIRED.test(companyName) || col(row, "Parent company (Apollo data)")) {
@@ -124,12 +152,10 @@ export function parseApolloCsv(
     if (!domain) { skip("no_domain"); continue; }
 
     if (seenEmails.has(email)) { skip("duplicate_email"); continue; }
-    if (seenDomains.has(domain)) { skip("second_contact_same_company"); continue; }
     seenEmails.add(email);
-    seenDomains.add(domain);
 
     const employees = parseInt(col(row, "# Employees"), 10);
-    leads.push({
+    const lead: ApolloLead = {
       email,
       firstName: col(row, "First Name") || null,
       lastName: col(row, "Last Name") || null,
@@ -140,11 +166,22 @@ export function parseApolloCsv(
       website: website ? (website.startsWith("http") ? website : `https://${website}`) : null,
       industry: col(row, "Industry") || null,
       employeeCount: Number.isFinite(employees) ? employees : null,
-      technologies: relevantTechnologies(col(row, "Technologies")),
+      technologies: relevantTechnologies(technologies),
       description: describe(row),
       country: col(row, "Country") || col(row, "Company Country") || null,
-    });
+      product: leadProduct,
+    };
+
+    // One contact per company: the best-ranked title wins, ties keep the first.
+    const current = byDomain.get(domain);
+    if (current && titleRank(current.title) <= titleRank(title)) {
+      skip("second_contact_same_company");
+      continue;
+    }
+    if (current) skip("second_contact_same_company");
+    byDomain.set(domain, lead);
   }
 
+  const leads = [...byDomain.values()];
   return { leads, skipped };
 }

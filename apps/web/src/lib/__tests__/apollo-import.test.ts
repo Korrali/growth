@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseApolloCsv, isBuyerTitle, relevantTechnologies } from "@/lib/import/apollo";
+import { parseApolloCsv, isBuyerTitle, relevantTechnologies, routeProduct, titleRank } from "@/lib/import/apollo";
 
 const HEADER =
   "First Name,Last Name,Title,Company Name,Email,Email Status,# Employees,Industry,Keywords,Person Linkedin Url,Website,Country,Technologies,Parent company (Apollo data)";
@@ -77,5 +77,42 @@ describe("helpers", () => {
     expect(techs.slice(0, 2)).toEqual(["Stripe", "Chargebee"]);
     expect(techs).toHaveLength(25);
     expect(techs.filter((t) => t === "Gmail")).toHaveLength(1);
+  });
+});
+
+describe("ROUTE mode (cross-use)", () => {
+  const cto = (email: string, site: string, techs: string) =>
+    `Al,Bo,Chief Technology Officer,Co,${email},Verified,80,,,,http://${site},US,"${techs}",`;
+
+  it("sends Stripe billers to Revenue and the rest to Trust", () => {
+    const { leads } = parseApolloCsv(
+      csv(cto("a@pay.io", "pay.io", "Gmail, Stripe"), cto("b@sec.io", "sec.io", "Gmail, Okta")),
+      new Set(),
+      "ROUTE",
+    );
+    expect(leads.map((l) => [l.email, l.product])).toEqual([
+      ["a@pay.io", "REVENUE"],
+      ["b@sec.io", "TRUST"],
+    ]);
+  });
+
+  it("keeps the founder over a CTO at the same company, whatever the row order", () => {
+    const { leads, skipped } = parseApolloCsv(
+      csv(cto("cto@pay.io", "pay.io", "Stripe"), 'Jo,Ko,Founder & CEO,Co,jo@pay.io,Verified,80,,,,http://pay.io,US,"Stripe",'),
+      new Set(),
+      "ROUTE",
+    );
+    expect(leads.map((l) => l.email)).toEqual(["jo@pay.io"]);
+    expect(skipped).toEqual({ second_contact_same_company: 1 });
+  });
+
+  it("routes and ranks", () => {
+    expect(routeProduct("Gmail, Stripe, Slack")).toBe("REVENUE");
+    expect(routeProduct("Gmail, Stripe Radar")).toBe("REVENUE");
+    expect(routeProduct("Gmail, Okta")).toBe("TRUST");
+    expect(titleRank("Co-Founder & CTO")).toBe(1);
+    expect(titleRank("CISO")).toBe(2);
+    expect(titleRank("CTO")).toBe(3);
+    expect(titleRank("VP Engineering")).toBe(4);
   });
 });

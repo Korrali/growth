@@ -24,6 +24,7 @@ import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { MarketedProduct } from "@/lib/products";
 import {
+  enqueueFitScore,
   enqueueOutreachSend,
   enqueueTrialIntervention,
   enqueueWeeklyInsights,
@@ -76,15 +77,29 @@ async function main() {
   );
 
   // Fit score handler
-  await boss.work<{ companyId: string; products?: string[] }>(
+  await boss.work<{ companyId: string; products?: string[]; fallbackProducts?: string[] }>(
     QUEUE_NAMES.FIT_SCORE,
     { batchSize: 1, localConcurrency: 1 },
     async ([job]) => {
       if (!job) return;
       console.log(`[worker] fit.score ${job.data.companyId}`);
-      await scoreFitForCompany(job.data.companyId, {
+      const result = await scoreFitForCompany(job.data.companyId, {
         products: job.data.products as MarketedProduct[] | undefined,
       });
+      // Cross-use: not a fit for the product it was imported for → give the
+      // other product a look before the lead is written off. Suppressed
+      // domains are never re-scored.
+      const fallback = job.data.fallbackProducts;
+      if (
+        fallback?.length &&
+        (result.fitProduct === "REJECT" || result.fitScore < 6) &&
+        !result.fitReasoning.startsWith("[auto-REJECT: domain suppressed")
+      ) {
+        await enqueueFitScore(
+          { companyId: job.data.companyId, products: fallback },
+          { startAfter: new Date(Date.now() + 60 * 60 * 1000) },
+        );
+      }
     },
   );
 

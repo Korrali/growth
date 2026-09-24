@@ -54,17 +54,25 @@ a no-op.
 ```bash
 /Users/ashishbhagat/products/deploy.sh growth prod     # must end with "✓ deployed"
 
-# copy the lists up
+# copy the lists up (the Trust lists overlap heavily; only the full one is needed)
+ssh -i ~/.ssh/angel-bot-key.pem ec2-user@3.216.168.27 'mkdir -p ~/growth/imports'
 scp -i ~/.ssh/angel-bot-key.pem "/Users/ashishbhagat/products/revenue/Revenue contacts.csv" \
-    "/Users/ashishbhagat/products/revenue/Revenue contacts 2.csv" ec2-user@3.216.168.27:~/growth/imports/
+    "/Users/ashishbhagat/products/trust/trust contacts list.csv" ec2-user@3.216.168.27:~/growth/imports/
 
 # on the server, in ~/growth/prod/apps/web
 E=/home/ec2-user/growth/.env.production
+I=/home/ec2-user/growth/imports
 pnpm tsx scripts/setup-revenue-machine.ts --env $E              # campaign + pause others, stop ON
-pnpm tsx scripts/import-apollo.ts --env $E --file "../../../imports/Revenue contacts.csv" --dry-run
-pnpm tsx scripts/import-apollo.ts --env $E --file "../../../imports/Revenue contacts.csv"
-pnpm tsx scripts/import-apollo.ts --env $E --file "../../../imports/Revenue contacts 2.csv"
+pnpm tsx scripts/import-apollo.ts --env $E --file "$I/Revenue contacts.csv" --product REVENUE --dry-run
+pnpm tsx scripts/import-apollo.ts --env $E --file "$I/Revenue contacts.csv" --product REVENUE
+pnpm tsx scripts/import-apollo.ts --env $E --file "$I/trust contacts list.csv" --product ROUTE
 ```
+
+Cross-use: `--product ROUTE` sends companies that bill through Stripe to Revenue and the rest
+to Trust, keeping one contact per company (founder first). Any company that scores below 6 for
+its product is re-scored for the other one an hour later. Expected split from the current
+files: ~529 Revenue, ~658 Trust. Trust leads wait (scored, not emailed) until a Trust campaign
+is ACTIVE (`setup-revenue-machine.ts --keep-trust <n>` keeps one running).
 
 Next day: open Growth → Outreach, read 10–20 drafts. If they are good:
 
