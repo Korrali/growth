@@ -82,8 +82,18 @@ async function main() {
   let scoringQueued = 0;
 
   let otherProduct = 0;
+  let alreadyCovered = 0;
   for (const [i, lead] of leads.entries()) {
-    let company = await prisma.company.findUnique({ where: { domain: lead.domain } });
+    let company = await prisma.company.findUnique({
+      where: { domain: lead.domain },
+      include: { contacts: { where: { isBuyer: true }, select: { id: true } } },
+    });
+    // One buyer per company across imports, not just within a file —
+    // auto-enroll would otherwise email every buyer contact a company has.
+    if (company && company.contacts.length > 0) {
+      alreadyCovered += 1;
+      continue;
+    }
     // A company already scored for a different product keeps that product —
     // its contacts enroll into that product's campaign, not this list's.
     if (company?.fitProduct && ![lead.product, "BOTH", "REJECT"].includes(company.fitProduct)) {
@@ -102,6 +112,7 @@ async function main() {
           description: lead.description,
           acquisitionSource: source,
         },
+        include: { contacts: { where: { isBuyer: true }, select: { id: true } } },
       });
       companiesCreated += 1;
     }
@@ -137,6 +148,7 @@ async function main() {
   console.log(`companies created: ${companiesCreated}`);
   console.log(`contacts created: ${contactsCreated}`);
   console.log(`fit scoring queued: ${scoringQueued}`);
+  if (alreadyCovered) console.log(`skipped (company already has a buyer contact): ${alreadyCovered}`);
   if (otherProduct) console.log(`skipped (company already scored for another product): ${otherProduct}`);
 
   await (await getBoss()).stop({ graceful: true }).catch(() => {});
