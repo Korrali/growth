@@ -39,3 +39,6 @@ npm-debug.log*
 # TypeScript build info
 *.tsbuildinfo
 apps/web/next-env.d.ts
+
+# env backups hold live secrets
+.env.bak*

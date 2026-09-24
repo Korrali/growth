@@ -64,7 +64,13 @@ VOICE & FORMAT:
 - Direct, specific, human, founder-to-founder. One genuine observation per email. Each step builds narratively on the last.
 - Subject lines: lowercase, punchy, 4-7 words max. No clickbait, no "quick question".
 
-For each step provide relevanceScore (1-10), personalizationScore (1-10), riskScore (1-10 where 1=safe, 10=risky/spammy).
+${profile.outboundOffer ? `THE OFFER (every step builds toward this one ask):
+- ${profile.outboundOffer.offer}
+- Step 1: NO links at all (links in a first cold email hurt inbox placement). Ask whether they want the link, or ask a question about how they catch these today.
+- Steps 2–4: may include this exact link once, as a bare URL on its own line: ${profile.outboundOffer.link}
+- Never invent a different link, a discount, a trial length, or a customer result.
+
+` : ""}For each step provide relevanceScore (1-10), personalizationScore (1-10), riskScore (1-10 where 1=safe, 10=risky/spammy).
 
 Respond with valid JSON only: an object with a "steps" array of 4 objects.`;
 }

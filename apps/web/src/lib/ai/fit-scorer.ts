@@ -3,7 +3,7 @@ import { anthropic, CLAUDE_MODELS } from "@/lib/ai/claude";
 import { BULK_MODEL } from "@/lib/ai/models";
 import { FitProduct } from "@prisma/client";
 import { enqueueFitScore, enqueueContactFind } from "@/lib/queue";
-import { PRODUCTS, MARKETED_PRODUCT_KEYS } from "@/lib/products";
+import { PRODUCTS, MARKETED_PRODUCT_KEYS, type MarketedProduct } from "@/lib/products";
 import { getDomainSuppressionReason } from "@/lib/sending/suppression";
 
 // ─── Landing page analysis ────────────────────────────────────────────────────
@@ -92,15 +92,15 @@ export interface FitScoreResult {
 // Company rows may still carry their fitProduct values.
 const SCORABLE_KEYS = MARKETED_PRODUCT_KEYS.filter((k) => PRODUCTS[k].outboundViable);
 
-const SYSTEM_PROMPT = `You are an ICP fit scorer for ${SCORABLE_KEYS.length} products:
+function systemPromptFor(keys: MarketedProduct[]): string {
+  return `You are an ICP fit scorer for ${keys.length} product${keys.length === 1 ? "" : "s"}:
 
-${SCORABLE_KEYS.map((k) => {
+${keys.map((k) => {
   const p = PRODUCTS[k];
   return `**${p.name}** (${k}) — ${p.oneLiner}\n\n${p.icp}`;
 }).join("\n\n---\n\n")}
 
-BOTH: if a company clearly fits both Korrali Trust and Korrali Revenue, use BOTH.
-
+${keys.includes("TRUST") && keys.includes("REVENUE") ? "BOTH: if a company clearly fits both Korrali Trust and Korrali Revenue, use BOTH.\n" : ""}
 A company can only receive one fitProduct — pick the product where the pain is most acute and observable.
 
 ALWAYS REJECT companies that have been acquired, merged, or operate as a subsidiary of a larger company — they are not independent buyers regardless of other signals. If your reasoning concludes a company is a competitor or not a buyer, fitProduct MUST be REJECT and the score MUST be 1-3; never attach a passing score to disqualifying reasoning.
@@ -108,6 +108,7 @@ ALWAYS REJECT companies that have been acquired, merged, or operate as a subsidi
 Score 1–5 = weak or no fit (REJECT unless clearly 5). Score 6–7 = decent fit, worth outreach. Score 8–10 = strong fit, high priority.
 
 Respond with valid JSON only. No prose before or after the JSON.`;
+}
 
 const OUTPUT_SCHEMA = {
   type: "object" as const,
@@ -124,7 +125,22 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
-export async function scoreFitForCompany(companyId: string): Promise<FitScoreResult> {
+export interface ScoreFitOptions {
+  /**
+   * Score against these products only. Set for list imports built for one
+   * product (an Apollo pull of Stripe-using SaaS founders is a Revenue list),
+   * so a lead can't be routed to a product whose campaign isn't running.
+   */
+  products?: MarketedProduct[];
+}
+
+export async function scoreFitForCompany(
+  companyId: string,
+  options: ScoreFitOptions = {},
+): Promise<FitScoreResult> {
+  const keys = options.products?.length
+    ? SCORABLE_KEYS.filter((k) => options.products!.includes(k))
+    : SCORABLE_KEYS;
   const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
 
   // Hard, deterministic gate: skip the LLM call entirely for domains we
@@ -191,7 +207,7 @@ export async function scoreFitForCompany(companyId: string): Promise<FitScoreRes
       system: [
         {
           type: "text",
-          text: SYSTEM_PROMPT,
+          text: systemPromptFor(keys),
           cache_control: { type: "ephemeral" },
         },
       ],

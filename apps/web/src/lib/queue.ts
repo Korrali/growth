@@ -28,6 +28,8 @@ export interface OutreachSendPayload {
 
 export interface FitScorePayload {
   companyId: string;
+  /** Restrict scoring to these products (see ScoreFitOptions). */
+  products?: string[];
 }
 
 export interface EmailGeneratePayload {
@@ -103,6 +105,7 @@ export async function enqueueOutreachSend(
 
 export async function enqueueFitScore(
   payload: FitScorePayload,
+  options?: { startAfter?: Date },
 ): Promise<string | null> {
   const boss = await getBoss();
   return boss.send(QUEUE_NAMES.FIT_SCORE, payload, {
@@ -110,6 +113,7 @@ export async function enqueueFitScore(
     retryLimit: 2,
     retryDelay: 30,
     expireInSeconds: 10 * 60,
+    startAfter: options?.startAfter,
   });
 }
 

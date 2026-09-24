@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { sendMail } from "@/lib/mail/transport";
 
 export async function sendAutoReply(classificationId: string): Promise<void> {
   const classification = await prisma.replyClassification.findUniqueOrThrow({
@@ -27,39 +28,22 @@ export async function sendAutoReply(classificationId: string): Promise<void> {
   const inboundDomain = process.env.RESEND_INBOUND_DOMAIN ?? null;
   const outreachId = classification.message.outreachId;
 
-  const payload: Record<string, unknown> = {
+  // Thread under the prospect's reply. rfcMessageId is set on replies read from
+  // the Workspace mailbox; Resend-era inbound rows only carry Resend's own id,
+  // which is not a Message-ID, so they are sent unthreaded rather than wrongly.
+  const inReplyTo = classification.message.rfcMessageId;
+  const sent = await sendMail({
     from: `${fromName} <${fromEmail}>`,
-    to: [contact.email],
+    to: contact.email,
     subject: replySubject,
     text: classification.founderDraft,
-    reply_to: (outreachId && inboundDomain)
+    replyTo: (outreachId && inboundDomain)
       ? `reply+${outreachId}@${inboundDomain}`
       : fromEmail,
-  };
-
-  // Thread the reply using Resend's headers support
-  if (classification.message.resendMessageId) {
-    payload.headers = {
-      "In-Reply-To": classification.message.resendMessageId,
-      References: classification.message.resendMessageId,
-    };
-  }
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+    inReplyTo,
+    references: inReplyTo ? [inReplyTo] : [],
   });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`Resend auto-reply error ${res.status}: ${errText}`);
-  }
-
-  const { id: resendMessageId } = (await res.json()) as { id: string };
+  const resendMessageId = sent.providerId;
 
   await prisma.$transaction([
     prisma.replyClassification.update({
@@ -74,6 +58,7 @@ export async function sendAutoReply(classificationId: string): Promise<void> {
         subject: replySubject,
         body: classification.founderDraft,
         resendMessageId,
+        rfcMessageId: sent.rfcMessageId,
         sentAt: new Date(),
       },
     }),

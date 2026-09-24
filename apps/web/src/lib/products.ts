@@ -22,6 +22,10 @@ export interface ProductProfile {
   /** False = consumer product; companies only qualify as partnership targets, and content/SEO carries the weight. */
   outboundViable: boolean;
   seoCta: string;
+  /** The one next step an interested reply is given (reply-classifier drafts). */
+  replyCta?: string;
+  /** The concrete offer every cold step builds toward (email-generator). */
+  outboundOffer?: { offer: string; link: string };
   /**
    * Where SEO topics come from for this product.
    *
@@ -85,31 +89,28 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
     name: "Korrali Revenue",
     brand: "Korrali",
     url: "https://revenue.korrali.com",
-    // POSITIONING (rewritten 2026-07-31): lead with billing-integrity findings,
-    // NOT failed-payment recovery. Dunning is a bloodbath — Stripe Smart Retries
-    // ships free and already-on, and Churn Buster / Baremetrics Recover / Paddle
-    // Retain / Butter / Gravy all fight over what's left, several of them also
-    // performance-priced. "Pay only on recovery" is table stakes there, not a wedge.
+    // POSITIONING (rewritten 2026-09-24): lead with the free install from the
+    // Stripe App Marketplace (approved 2026-09-07). The offer is "install it,
+    // see what it flags in your own Stripe data, uninstall if it finds nothing"
+    // — detection is free forever with no card, so the ask costs the prospect
+    // nothing and needs no call.
     //
-    // The uncontested half is the config-error class: stale prices, never-expiring
-    // coupons, invoice gaps, duplicate charges. Stripe structurally CANNOT detect
-    // these — it doesn't know what you *intended* to bill. No incumbent owns this,
-    // it needs only READ access (kills the biggest cold-outreach trust objection),
-    // and the findings are self-verifying in the prospect's own dashboard.
-    //
-    // Lead offer is therefore the READ-ONLY audit, not the write-access subscription.
+    // Keep every claim to what the product does. Do NOT say "read-only" (the
+    // app writes to Stripe to run recoveries), do NOT quote the retired $499
+    // one-time audit or $999 Scale plan, and describe drift/coupon findings as
+    // things it flags for review, not proven leakage — an archived price or a
+    // long-running coupon can be an agreed deal term.
     oneLiner:
-      "A read-only audit of your Stripe account that finds revenue your own billing configuration is quietly leaking — customers still paying a price you retired, 100%-off coupons that never expired, subscriptions that silently stopped invoicing, and duplicate charges. Stripe can't surface these because Stripe doesn't know what you meant to charge. Read-only access, findings you can verify in your own dashboard in 30 seconds. A one-time $499 audit is the entry point; ongoing detection plus automated recovery (10% of what's recovered, capped at $5K/mo) is the upsell once the leaks are proven.",
-    icp: `CORE sweet spot (score 8–10): $50–150K MRR subscription businesses on Stripe. This band is where the unit economics work: 3–8% leakage is $1.5–12K/mo (recovery clearly beats the flat $999 Scale plan), the account is large enough to justify a warm product-led sales touch, and it converts off the free audit. Score 8+ when MRR (or strong proxies — Series A/B, 30–150 employees, "scaling revenue") lands in or above this band.
-Marginal (score 4–5, treat as lead-gen not primary target): businesses under ~$30K MRR. Their leakage is real but small, the 10% performance fee nets us only tens of dollars a month, and they can't be upsold to a flat plan (it would cost more than we recover for them). Prospect them only when other signals are strong; they're pipeline colour and future case studies, not the revenue target.
-Two segments qualify at the core band:
-1. Subscription SaaS: subscription or usage-based pricing, engineering team small relative to customer base (billing is deprioritised), scaling MRR (Series A to Series B is the sweet spot — post-PMF, real volume, no RevOps hire yet), Stripe in tech stack or job postings, multiple pricing tiers or seat-based billing.
-2. Larger membership and creator businesses on Stripe ($50K+/mo): established paid communities (Skool, Circle, Mighty Networks), course platforms (Kajabi, Podia, Teachable), paid newsletters, membership sites, coaching programs with recurring billing AND meaningful volume. These have worse payment hygiene than SaaS and no tooling culture — high leak rates and zero incumbent competition. A tiny creator doing $3–8K/mo does NOT qualify at the core band (same small-fee problem); require signals of real scale.
+      "A Stripe app (listed on the Stripe App Marketplace) that watches a subscription business's Stripe account for revenue that slips through: failed payments nobody retried, invoices stuck past due, charge-failure spikes, duplicate charges, subscriptions that stopped invoicing, customers still on a retired price, and coupons that never expired. Detection is free forever with no card; each finding shows the customer and dollar amount so it can be checked in the Stripe dashboard. Paying only unlocks acting on findings (retries, dunning, fixes) — first 3 recoveries free, then $99/mo under $25K MRR, $249/mo for $25K–$150K MRR, $499/mo above that, or 10% of what's recovered ($49/mo minimum).",
+    icp: `GOOD FIT (score 7–9): independent subscription or usage-billed businesses that bill customers through Stripe — B2B/B2C SaaS, subscription apps, paid communities, memberships, course platforms — with roughly 10–200 employees. Pricing now scales from $99/mo, so small subscription companies are real customers, not just lead-gen: a 10–30 person SaaS on Stripe is a 7.
+Score 9–10 when there are signs of billing complexity or volume: multiple pricing tiers, seat/usage pricing, annual + monthly plans, discounts/coupons in use, recent funding, or a growing customer base without a finance/RevOps team.
+Score 6 when Stripe use or recurring billing is likely but not visible.
+Score 4–5 when billing is probably not recurring (one-off purchases, services invoiced by hand) or not on Stripe.
 
 ALWAYS REJECT — these are competitors or non-buyers for Revenue:
-- Any company whose core product IS subscription analytics, revenue intelligence, failed payment recovery, dunning management, billing health monitoring, MRR/churn reporting, or subscription billing infrastructure. Named examples: Baremetrics, ChartMogul, ProfitWell, Maxio (formerly ProfitWell), Paddle (billing platform), Recurly, Chargebee, Stunning, Gravy, Churnbuster, Payfunnels, Stripe Radar, MoonClerk. Apply this rule to ANY company fitting that description, not just named ones.
-- Signals that a company IS a competitor: their product helps OTHER SaaS companies track MRR, recover failed payments, reduce churn, manage subscriptions, or monitor billing health. If their customers are SaaS founders using their tool to understand their own revenue — they are a competitor.
-- One-time-purchase businesses with no recurring component, services firms and agencies billing by invoice, companies with dedicated billing engineering teams, enterprise companies with custom invoicing only.`,
+- Any company whose core product IS subscription analytics, revenue intelligence, failed payment recovery, dunning management, billing health monitoring, MRR/churn reporting, or subscription billing infrastructure. Named examples: Baremetrics, ChartMogul, ProfitWell, Maxio, Paddle, Recurly, Chargebee, Churnkey, Stunning, Gravy, Churnbuster, Payfunnels, Bleedpoint, MoonClerk. Apply this rule to ANY company fitting that description, not just named ones.
+- Signals that a company IS a competitor: their product helps OTHER companies track MRR, recover failed payments, reduce churn, manage subscriptions, or monitor billing health.
+- Agencies, consultancies, IT-services and outsourcing firms that bill by project or hour, one-time-purchase businesses with no recurring component, and enterprises with custom invoicing only or a dedicated billing engineering team.`,
     buyers:
       "Founders, CTOs, RevOps at subscription SaaS companies running on Stripe; owners of paid communities, course platforms, and membership businesses.",
     // Founder/CEO lead the list — contact-finder.ts already searches for
@@ -135,6 +136,13 @@ ALWAYS REJECT — these are competitors or non-buyers for Revenue:
     ],
     outboundViable: true,
     seoCta: "See your revenue health for free at revenue.korrali.com",
+    outboundOffer: {
+      offer:
+        "Try it free: install from the Stripe App Marketplace, see what it flags in their own Stripe data, uninstall if it finds nothing. No card, no call needed.",
+      link: "https://marketplace.stripe.com/apps/korrali-revenue-recovery",
+    },
+    replyCta:
+      "Install Korrali Revenue free from the Stripe App Marketplace (https://marketplace.stripe.com/apps/korrali-revenue-recovery) — it starts flagging as soon as it is connected, detection stays free with no card, and they can uninstall if it finds nothing. Offer to walk through the findings with them once it has run.",
     topicSourcing: "community",
   },
 

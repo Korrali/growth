@@ -7,6 +7,7 @@ import { injectUtmIntoText } from "@/lib/utm";
 import { PRODUCTS } from "@/lib/products";
 import { verifyEmail } from "@/lib/import/email-verifier";
 import { enqueueEmailGenerate } from "@/lib/queue";
+import { sendMail } from "@/lib/mail/transport";
 
 // How many times a step may abort for a missing draft before the sequence is
 // stopped for good. Each attempt is an hour apart, so this is a ~3 hour window
@@ -265,48 +266,54 @@ export async function sendOutreachStep(
     ? `reply+${outreachId}@${inboundDomain}`
     : fromEmail;
 
-  const payload = {
-    from: `${fromName} <${fromEmail}>`,
-    to: [contact.email],
-    subject: draft.subject,
-    text: bodyWithFooter,
-    reply_to: replyTo,
-    // RFC 2369 List-Unsubscribe — lets Gmail/Outlook render a native
-    // "Unsubscribe" control and marks us as a legitimate list sender, which
-    // improves inbox placement (Microsoft especially weights this, and honors
-    // the mailto form even where it distrusts the HTTPS link). We intentionally
-    // omit List-Unsubscribe-Post (one-click) because /unsubscribe is a GET-only
-    // page — advertising one-click would make providers POST to a 405 and read
-    // as broken. mailto + the existing tokenized HTTPS link is the safe win.
-    headers: {
-      "List-Unsubscribe": `<mailto:${fromEmail}?subject=unsubscribe>, <${unsubscribeUrl}>`,
-    },
-  };
+  // Follow-ups go out as replies in the step-1 thread ("Re: <first subject>"),
+  // so the prospect sees one conversation, not four unrelated cold emails.
+  const priorOutbound = stepNumber > 1
+    ? await prisma.emailMessage.findMany({
+        where: { outreachId, direction: "OUTBOUND", rfcMessageId: { not: null } },
+        orderBy: { sentAt: "asc" },
+        select: { subject: true, rfcMessageId: true },
+      })
+    : [];
+  const threadRoot = priorOutbound[0];
+  const references = priorOutbound.map((m) => m.rfcMessageId!).filter(Boolean);
+  const subject = threadRoot?.subject
+    ? (/^re:/i.test(threadRoot.subject) ? threadRoot.subject : `Re: ${threadRoot.subject}`)
+    : draft.subject;
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => "");
+  let sent;
+  try {
+    sent = await sendMail({
+      from: `${fromName} <${fromEmail}>`,
+      to: contact.email,
+      subject,
+      text: bodyWithFooter,
+      replyTo,
+      // RFC 2369 List-Unsubscribe — lets Gmail/Outlook render a native
+      // "Unsubscribe" control and marks us as a legitimate list sender, which
+      // improves inbox placement (Microsoft especially weights this, and honors
+      // the mailto form even where it distrusts the HTTPS link). We intentionally
+      // omit List-Unsubscribe-Post (one-click) because /unsubscribe is a GET-only
+      // page — advertising one-click would make providers POST to a 405 and read
+      // as broken. mailto + the existing tokenized HTTPS link is the safe win.
+      headers: {
+        "List-Unsubscribe": `<mailto:${fromEmail}?subject=unsubscribe>, <${unsubscribeUrl}>`,
+      },
+      inReplyTo: references.at(-1) ?? null,
+      references,
+    });
+  } catch (err) {
     await prisma.auditLog.create({
       data: {
         actor: "system",
         action: "outreach.send.failed",
         entity: "Outreach",
         entityId: outreachId,
-        metadata: { stepNumber, status: res.status, error: errorText },
+        metadata: { stepNumber, error: err instanceof Error ? err.message : String(err) },
       },
     });
-    throw new Error(`Resend API error ${res.status}: ${errorText}`);
+    throw err;
   }
-
-  const resendData = (await res.json()) as { id: string };
 
   // Record EmailMessage
   await prisma.emailMessage.create({
@@ -314,9 +321,10 @@ export async function sendOutreachStep(
       outreachId,
       contactId: contact.id,
       direction: "OUTBOUND",
-      subject: draft.subject,
+      subject,
       body: bodyWithFooter,
-      resendMessageId: resendData.id,
+      resendMessageId: sent.providerId,
+      rfcMessageId: sent.rfcMessageId,
       sentAt: new Date(),
       stepNumber,
     },
@@ -328,12 +336,12 @@ export async function sendOutreachStep(
       action: "outreach.sent",
       entity: "Outreach",
       entityId: outreachId,
-      metadata: { stepNumber, resendMessageId: resendData.id, to: contact.email },
+      metadata: { stepNumber, providerId: sent.providerId, to: contact.email },
     },
   });
 
   // Schedule next step
   await scheduleNextStep(outreachId);
 
-  return { sent: true, messageId: resendData.id };
+  return { sent: true, messageId: sent.providerId };
 }

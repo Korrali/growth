@@ -8,7 +8,7 @@ const mockPrisma = {
   emailMessage: { findUniqueOrThrow: vi.fn() },
   replyClassification: { upsert: vi.fn() },
   auditLog: { create: vi.fn() },
-  outreach: { update: vi.fn() },
+  outreach: { update: vi.fn(), updateMany: vi.fn() },
   contact: { update: vi.fn() },
 };
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
@@ -368,4 +368,59 @@ describe("classifyReply — non-terminal categories", () => {
       expect(mockAddEmailSuppression).not.toHaveBeenCalled();
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// Sequence control + founder alerts
+// ---------------------------------------------------------------------------
+
+describe("classifyReply — sequence control and founder alerts", () => {
+  function respond(category: string, founderDraft = "draft") {
+    mockCreate.mockResolvedValue({
+      content: [{ type: "text", text: JSON.stringify({ category, priority: 5, founderDraft }) }],
+    });
+  }
+
+  it("parks the outreach as REPLIED on a human, non-terminal reply", async () => {
+    respond("OBJECTION");
+    const { classifyReply } = await import("@/lib/ai/reply-classifier");
+    await classifyReply("msg_1");
+    expect(mockPrisma.outreach.updateMany).toHaveBeenCalledWith({
+      where: { id: "out_1", status: { in: ["PENDING", "ACTIVE"] } },
+      data: { status: "REPLIED" },
+    });
+  });
+
+  it("resumes the sequence tomorrow after an out-of-office", async () => {
+    respond("AUTO_REPLY", "");
+    const { classifyReply } = await import("@/lib/ai/reply-classifier");
+    await classifyReply("msg_1");
+    expect(mockPrisma.outreach.updateMany).toHaveBeenCalledWith({
+      where: { id: "out_1", status: "REPLIED" },
+      data: { status: "ACTIVE", nextSendAt: expect.any(Date) },
+    });
+  });
+
+  it("emails the founder about an interested reply", async () => {
+    process.env.FOUNDER_EMAIL = "founder@example.com";
+    respond("INTERESTED", "Great — here is the link.");
+    const { classifyReply } = await import("@/lib/ai/reply-classifier");
+    await classifyReply("msg_1");
+    const alert = mockFetch.mock.calls
+      .map((c) => JSON.parse(c[1].body))
+      .find((b) => b.to?.[0] === "founder@example.com");
+    expect(alert.subject).toMatch(/^\[INTERESTED\] Jane/);
+    expect(alert.text).toContain("Great — here is the link.");
+    delete process.env.FOUNDER_EMAIL;
+  });
+
+  it("does not alert the founder about an unsubscribe", async () => {
+    process.env.FOUNDER_EMAIL = "founder@example.com";
+    respond("UNSUBSCRIBE", "Will do.");
+    const { classifyReply } = await import("@/lib/ai/reply-classifier");
+    await classifyReply("msg_1");
+    const bodies = mockFetch.mock.calls.map((c) => JSON.parse(c[1].body));
+    expect(bodies.find((b) => b.to?.[0] === "founder@example.com")).toBeUndefined();
+    delete process.env.FOUNDER_EMAIL;
+  });
 });

@@ -424,7 +424,11 @@ model EmailMessage {
   direction        MessageDirection
   subject          String?
   body             String
+  // Provider message id. Resend's id on Resend-era rows; the Message-ID on
+  // rows sent through the Workspace mailbox. Column name predates Gmail.
   resendMessageId  String?          @unique
+  // RFC 5322 Message-ID header. Replies are matched to their outreach by it.
+  rfcMessageId     String?
   sentAt           DateTime?
   bouncedAt        DateTime?
   stepNumber       Int?
@@ -434,6 +438,7 @@ model EmailMessage {
   replyClassification ReplyClassification?
 
   @@index([contactId, direction])
+  @@index([rfcMessageId])
   // Partial unique index for outbound double-send prevention:
   // CREATE UNIQUE INDEX email_message_outbound_step ON "EmailMessage"("outreachId", "stepNumber") WHERE direction = 'OUTBOUND'
   // Run this as raw SQL after first db push

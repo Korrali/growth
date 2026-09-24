@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockPrisma = {
   outreach: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
   outreachEmailDraft: { findUnique: vi.fn() },
-  emailMessage: { create: vi.fn() },
+  emailMessage: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
   auditLog: { create: vi.fn(), count: vi.fn() },
   contact: { update: vi.fn() },
 };
@@ -100,6 +100,7 @@ beforeEach(() => {
   mockPrisma.outreach.findUniqueOrThrow.mockResolvedValue(makeOutreach());
   mockPrisma.outreachEmailDraft.findUnique.mockResolvedValue(makeDraft());
   mockPrisma.emailMessage.create.mockResolvedValue({});
+  mockPrisma.emailMessage.findMany.mockResolvedValue([]);
   mockPrisma.auditLog.create.mockResolvedValue({});
   mockPrisma.auditLog.count.mockResolvedValue(0);
   mockEnqueueEmailGenerate.mockResolvedValue("job_1");
@@ -363,5 +364,38 @@ describe("sendOutreachStep — successful send", () => {
     });
     const { sendOutreachStep } = await importSender();
     await expect(sendOutreachStep("out_1", 1)).rejects.toThrow("Resend API error 422");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Follow-up threading
+// ---------------------------------------------------------------------------
+
+describe("sendOutreachStep — follow-up threading", () => {
+  it("sends step 1 with the draft subject and no parent", async () => {
+    const { sendOutreachStep } = await importSender();
+    await sendOutreachStep("out_1", 1);
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(body.subject).toBe(makeDraft().subject);
+    expect(body.headers["In-Reply-To"]).toBeUndefined();
+    expect(mockPrisma.emailMessage.findMany).not.toHaveBeenCalled();
+  });
+
+  it("sends a follow-up as a reply in the step-1 thread", async () => {
+    mockPrisma.emailMessage.findMany.mockResolvedValue([
+      { subject: "stripe leaks at acme", rfcMessageId: "<s1@getkorrali.com>" },
+      { subject: "Re: stripe leaks at acme", rfcMessageId: "<s2@getkorrali.com>" },
+    ]);
+    const { sendOutreachStep } = await importSender();
+    await sendOutreachStep("out_1", 3);
+
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(body.subject).toBe("Re: stripe leaks at acme");
+    expect(body.headers["In-Reply-To"]).toBe("<s2@getkorrali.com>");
+    expect(body.headers.References).toBe("<s1@getkorrali.com> <s2@getkorrali.com>");
+    expect(body.headers["List-Unsubscribe"]).toBeDefined();
+    expect(mockPrisma.emailMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ subject: "Re: stripe leaks at acme", stepNumber: 3 }) }),
+    );
   });
 });

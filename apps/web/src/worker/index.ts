@@ -17,9 +17,12 @@ import { runCommunityScan } from "@/lib/community/scanner";
 import { buildLinkedInDraft } from "@/lib/linkedin/draft-builder";
 import { processVisitor } from "@/lib/visitor/processor";
 import { runAutoEnroll } from "@/lib/enroll/auto-enroll";
+import { pollInbox } from "@/lib/mail/inbox-poller";
+import { sendDailyDigest } from "@/lib/digest/daily-digest";
 import { SEO_TOPIC_CACHE_SLUG } from "@/lib/content-slugs";
 import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import type { MarketedProduct } from "@/lib/products";
 import {
   enqueueOutreachSend,
   enqueueTrialIntervention,
@@ -53,6 +56,7 @@ async function main() {
     "community-scan-trigger", "seo-topic-refresh", QUEUE_NAMES.COMMUNITY_SCAN,
     QUEUE_NAMES.LINKEDIN_DRAFT, QUEUE_NAMES.VISITOR_PROCESS,
     "seo-auto-publish", "auto-enroll-check",
+    "inbox-poll", "daily-digest",
   ];
   for (const q of allQueues) {
     await boss.createQueue(q);
@@ -72,13 +76,15 @@ async function main() {
   );
 
   // Fit score handler
-  await boss.work<{ companyId: string }>(
+  await boss.work<{ companyId: string; products?: string[] }>(
     QUEUE_NAMES.FIT_SCORE,
     { batchSize: 1, localConcurrency: 1 },
     async ([job]) => {
       if (!job) return;
       console.log(`[worker] fit.score ${job.data.companyId}`);
-      await scoreFitForCompany(job.data.companyId);
+      await scoreFitForCompany(job.data.companyId, {
+        products: job.data.products as MarketedProduct[] | undefined,
+      });
     },
   );
 
@@ -521,7 +527,27 @@ async function main() {
   });
 
 
+  // Read replies out of the Workspace mailbox. No-op without GMAIL_* creds.
+  await boss.work("inbox-poll", async ([job]) => {
+    if (!job) return;
+    const summary = await pollInbox();
+    if (summary.captured || summary.bounces) {
+      console.log(
+        `[cron] inbox-poll: scanned=${summary.scanned} captured=${summary.captured} bounces=${summary.bounces}`,
+      );
+    }
+  });
+
+  // Founder's morning sheet.
+  await boss.work("daily-digest", async ([job]) => {
+    if (!job) return;
+    await sendDailyDigest();
+    console.log("[cron] daily-digest: sent");
+  });
+
   await boss.schedule("outreach-due-check",       "*/15 * * * *");
+  await boss.schedule("inbox-poll",               "*/5 * * * *");
+  await boss.schedule("daily-digest",             "30 2 * * *");    // 02:30 UTC = 08:00 IST, after the US send day closes
   await boss.schedule("weekly-insights-trigger",  "0 6 * * 1");
   await boss.schedule("trial-daily-check",        "0 7 * * *");
   await boss.schedule("company-discover-trigger", "0 5 * * 1");     // Mon 5am UTC — weekly; free Tavily plan (~35 credits/run, keep <200/mo incl. community scans)

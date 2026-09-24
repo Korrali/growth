@@ -26,6 +26,10 @@ function isInSendWindow(
 ): boolean {
   try {
     const now = new Date();
+    // B2B cold email: weekdays only in the recipient's timezone. A Saturday
+    // email sits under Monday's pile and reads as automated.
+    const weekday = now.toLocaleString("en-US", { weekday: "short", timeZone: timezone });
+    if (weekday === "Sat" || weekday === "Sun") return false;
     const hourStr = now.toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: timezone });
     const hour = parseInt(hourStr, 10);
     return hour >= start && hour < end;

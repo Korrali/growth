@@ -4,8 +4,20 @@ import { BULK_MODEL } from "@/lib/ai/models";
 import { ReplyCategory, SuppressionReason } from "@prisma/client";
 import { addEmailSuppression } from "@/lib/sending/suppression";
 import { enqueueReplyAutoSend } from "@/lib/queue";
+import { sendMail } from "@/lib/mail/transport";
+import { PRODUCTS, type MarketedProduct } from "@/lib/products";
 
 const AUTO_SEND_DELAY_HOURS = 2;
+
+// Categories a founder should read today. Everything else is either handled
+// automatically (unsubscribe, bounce, auto-reply) or a flat no.
+const FOUNDER_ALERT_CATEGORIES = new Set<ReplyCategory>([
+  ReplyCategory.INTERESTED,
+  ReplyCategory.OBJECTION,
+  ReplyCategory.NOT_NOW,
+  ReplyCategory.WRONG_PERSON,
+  ReplyCategory.OTHER,
+]);
 
 const STOP_CATEGORIES = new Set<ReplyCategory>([
   ReplyCategory.UNSUBSCRIBE,
@@ -36,7 +48,8 @@ founderDraft: a 2-3 sentence suggested reply matching the tone the founder shoul
 - INTERESTED → warm, move to schedule: "Great to hear from you..."
 - OBJECTION → address it directly
 - UNSUBSCRIBE → "Will do, I've removed you."
-- NEGATIVE → empty string (don't reply)`;
+- NEGATIVE → empty string (don't reply)
+If a "Next step to offer" is given, an INTERESTED draft must hand them exactly that next step (include the link as-is). Never promise results, discounts, or anything not stated in the product context.`;
 
 const OUTPUT_SCHEMA = {
   type: "object" as const,
@@ -48,6 +61,14 @@ const OUTPUT_SCHEMA = {
   required: ["category", "priority", "founderDraft"],
   additionalProperties: false,
 };
+
+function productContext(product: string | undefined): string {
+  const profile = product ? PRODUCTS[product as MarketedProduct] : undefined;
+  if (!profile) return "";
+  const lines = [`Product context: ${profile.name} — ${profile.oneLiner}`];
+  if (profile.replyCta) lines.push(`Next step to offer: ${profile.replyCta}`);
+  return `${lines.join("\n")}\n\n---\n\n`;
+}
 
 export async function classifyReply(messageId: string) {
   const message = await prisma.emailMessage.findUniqueOrThrow({
@@ -65,7 +86,7 @@ export async function classifyReply(messageId: string) {
     messages: [
       {
         role: "user",
-        content: `Subject: ${message.subject ?? "(none)"}\n\nBody:\n${message.body}`,
+        content: `${productContext(message.outreach?.campaign.product)}Subject: ${message.subject ?? "(none)"}\n\nBody:\n${message.body}`,
       },
     ],
     output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
@@ -122,37 +143,62 @@ export async function classifyReply(messageId: string) {
     await enqueueReplyAutoSend({ classificationId: classification.id }, autoSendAt);
   }
 
-  // Forward INTERESTED replies to the client's inbox (fire-and-forget)
+  const contact = message.contact;
+  const company = contact.company;
+  const alertLines = [
+    `Contact: ${contact.firstName ?? ""} ${contact.lastName ?? ""} (${contact.email})`,
+    `Company: ${company?.name ?? "unknown"} (${company?.domain ?? ""})`,
+    `Title: ${contact.title ?? "unknown"}`,
+    "",
+    "--- Their reply ---",
+    message.body,
+    "",
+    "--- Suggested response (AI draft) ---",
+    parsed.founderDraft || "(none — no reply recommended)",
+    "",
+    isInterested && autoSendAt
+      ? `This draft auto-sends at ${autoSendAt.toISOString()} unless you cancel it in Growth → Inbox, or reply yourself first.`
+      : `Reply directly to: ${contact.email}`,
+  ];
+
+  // Forward INTERESTED replies to a client campaign's inbox (best-effort).
   const replyForwardTo = message.outreach?.campaign.replyForwardTo;
   if (isInterested && replyForwardTo) {
-    const contact = message.contact;
-    const company = contact.company;
-    const lines = [
-      `Contact: ${contact.firstName ?? ""} ${contact.lastName ?? ""} (${contact.email})`,
-      `Company: ${company?.name ?? "unknown"} (${company?.domain ?? ""})`,
-      `Title: ${contact.title ?? "unknown"}`,
-      "",
-      "--- Their reply ---",
-      message.body,
-      "",
-      "--- Suggested response (AI draft) ---",
-      parsed.founderDraft,
-      "",
-      `Reply directly to: ${contact.email}`,
-    ];
-    fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM ?? "growth@korrali.com",
-        to: [replyForwardTo],
-        subject: `[INTERESTED] ${contact.firstName ?? contact.email} from ${company?.name ?? "unknown"} replied`,
-        text: lines.join("\n"),
-      }),
-    }).catch(() => {}); // best-effort — never block classification on forwarding
+    sendMail({
+      from: process.env.EMAIL_FROM ?? "growth@korrali.com",
+      to: replyForwardTo,
+      subject: `[INTERESTED] ${contact.firstName ?? contact.email} from ${company?.name ?? "unknown"} replied`,
+      text: alertLines.join("\n"),
+    }).catch(() => {});
+  }
+
+  // Alert the founder to anything worth a human look, for internal campaigns.
+  // Best-effort: a failed alert must never fail classification.
+  const founder = process.env.FOUNDER_EMAIL;
+  if (!replyForwardTo && founder && FOUNDER_ALERT_CATEGORIES.has(parsed.category)) {
+    sendMail({
+      from: process.env.EMAIL_FROM ?? "growth@korrali.com",
+      to: founder,
+      subject: `[${parsed.category}] ${contact.firstName ?? contact.email} (${company?.name ?? "unknown"}) replied`,
+      text: alertLines.join("\n"),
+    }).catch(() => {});
+  }
+
+  // An out-of-office is not a reply. The inbox poller parked the outreach as
+  // REPLIED on arrival; put it back so the sequence resumes tomorrow.
+  if (parsed.category === ReplyCategory.AUTO_REPLY && message.outreachId) {
+    await prisma.outreach.updateMany({
+      where: { id: message.outreachId, status: "REPLIED" },
+      data: { status: "ACTIVE", nextSendAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+    });
+  } else if (!STOP_CATEGORIES.has(parsed.category) && message.outreachId) {
+    // Any human reply ends the automated sequence — a prospect who wrote back
+    // "not now" or with a question must never get the canned day-7 bump. The
+    // poller already does this on arrival; this covers every other intake path.
+    await prisma.outreach.updateMany({
+      where: { id: message.outreachId, status: { in: ["PENDING", "ACTIVE"] } },
+      data: { status: "REPLIED" },
+    });
   }
 
   // Stop sequence and suppress for terminal categories
