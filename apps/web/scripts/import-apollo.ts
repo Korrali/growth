@@ -50,7 +50,7 @@ async function main() {
   const existing = new Set(
     (await prisma.contact.findMany({ select: { email: true } })).map((c) => c.email.toLowerCase()),
   );
-  const { leads, skipped } = parseApolloCsv(text, existing);
+  const { leads, skipped } = parseApolloCsv(text, existing, product);
 
   console.log(`file: ${basename(file)}`);
   console.log(`qualifying leads: ${leads.length}`);
@@ -73,8 +73,15 @@ async function main() {
   let contactsCreated = 0;
   let scoringQueued = 0;
 
+  let otherProduct = 0;
   for (const [i, lead] of leads.entries()) {
     let company = await prisma.company.findUnique({ where: { domain: lead.domain } });
+    // A company already scored for a different product keeps that product —
+    // its contacts enroll into that product's campaign, not this list's.
+    if (company?.fitProduct && ![product, "BOTH", "REJECT"].includes(company.fitProduct)) {
+      otherProduct += 1;
+      continue;
+    }
     if (!company) {
       company = await prisma.company.create({
         data: {
@@ -118,6 +125,7 @@ async function main() {
   console.log(`companies created: ${companiesCreated}`);
   console.log(`contacts created: ${contactsCreated}`);
   console.log(`fit scoring queued: ${scoringQueued}`);
+  if (otherProduct) console.log(`skipped (company already scored for another product): ${otherProduct}`);
 
   await (await getBoss()).stop({ graceful: true }).catch(() => {});
   await prisma.$disconnect();

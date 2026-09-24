@@ -44,8 +44,15 @@ export interface ApolloParseResult {
   skipped: Partial<Record<SkipReason, number>>;
 }
 
-const BUYER_TITLE =
-  /\b(founder|co-?founder|ceo|chief executive|owner|president|cfo|chief financial|finance|financial|controller|revops|revenue operations|head of revenue)\b/i;
+// Who counts as a decision-maker differs by product: Revenue sells to whoever
+// owns the Stripe money (founders, finance); Trust sells to whoever answers the
+// security questionnaire (CTO, security, compliance — or the founder).
+const BUYER_TITLES: Record<string, RegExp> = {
+  REVENUE:
+    /\b(founder|co-?founder|ceo|chief executive|owner|president|cfo|chief financial|finance|financial|controller|revops|revenue operations|head of revenue)\b/i,
+  TRUST:
+    /\b(founder|co-?founder|ceo|chief executive|owner|president|cto|chief technology|chief technical|ciso|chief information security|security|compliance|grc|trust|vp,? (of )?engineering|vice president,? (of )?engineering|head of engineering)\b/i,
+};
 
 const ACQUIRED = /\bacq(\.|uired)?\b|\bacquired by\b|\ba (division|subsidiary) of\b/i;
 
@@ -61,8 +68,8 @@ export function relevantTechnologies(raw: string): string[] {
   return [...billing, ...rest].slice(0, MAX_TECHS);
 }
 
-export function isBuyerTitle(title: string): boolean {
-  return BUYER_TITLE.test(title);
+export function isBuyerTitle(title: string, product = "REVENUE"): boolean {
+  return (BUYER_TITLES[product] ?? BUYER_TITLES.REVENUE!).test(title);
 }
 
 function col(row: Record<string, string>, name: string): string {
@@ -79,7 +86,11 @@ function describe(row: Record<string, string>): string | null {
   return parts.length ? parts.join("\n") : null;
 }
 
-export function parseApolloCsv(text: string, existingEmails: Set<string> = new Set()): ApolloParseResult {
+export function parseApolloCsv(
+  text: string,
+  existingEmails: Set<string> = new Set(),
+  product = "REVENUE",
+): ApolloParseResult {
   const { data } = Papa.parse<Record<string, string>>(text.replace(/^﻿/, ""), {
     header: true,
     skipEmptyLines: true,
@@ -100,7 +111,7 @@ export function parseApolloCsv(text: string, existingEmails: Set<string> = new S
     if (col(row, "Email Status").toLowerCase() !== "verified") { skip("email_not_verified"); continue; }
 
     const title = col(row, "Title");
-    if (!isBuyerTitle(title)) { skip("not_decision_maker"); continue; }
+    if (!isBuyerTitle(title, product)) { skip("not_decision_maker"); continue; }
 
     const companyName = col(row, "Company Name");
     if (ACQUIRED.test(companyName) || col(row, "Parent company (Apollo data)")) {

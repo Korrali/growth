@@ -63,6 +63,14 @@ describe("helpers", () => {
     expect(isBuyerTitle("Director of Engineering")).toBe(false);
   });
 
+  it("uses Trust's buyer titles for a Trust list", () => {
+    expect(isBuyerTitle("Chief Technology Officer", "TRUST")).toBe(true);
+    expect(isBuyerTitle("VP of Engineering", "TRUST")).toBe(true);
+    expect(isBuyerTitle("Chief Information Security Officer", "TRUST")).toBe(true);
+    expect(isBuyerTitle("Chief Technology Officer", "REVENUE")).toBe(false);
+    expect(isBuyerTitle("VP Finance", "TRUST")).toBe(false);
+  });
+
   it("puts billing tools first, dedupes and caps the list", () => {
     const raw = ["Gmail", "Stripe", "Gmail", ...Array.from({ length: 40 }, (_, i) => `T${i}`), "Chargebee"].join(", ");
     const techs = relevantTechnologies(raw);
