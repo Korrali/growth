@@ -47,6 +47,10 @@ FOUNDER_EMAIL=bhagat.ashish.a@gmail.com
 MAX_SENDS_PER_DAY=30
 ```
 
+Check it: `pnpm tsx scripts/check-mailbox.ts --env $E --send-test you@example.com` — SMTP and IMAP
+must say OK, and the test email's From must be the alias (if it shows the login address, step 5
+is missing).
+
 With `GMAIL_USER` + `GMAIL_APP_PASSWORD` set, every Growth email (cold, auto-replies, alerts,
 digest) goes through the mailbox. Without them it falls back to Resend and the inbox poll is
 a no-op.
