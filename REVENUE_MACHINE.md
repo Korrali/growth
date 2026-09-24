@@ -25,7 +25,7 @@ jobs are answering replies, LinkedIn, and install walkthroughs.
 
 ### 1. Mailbox app password (5 min)
 
-For the Workspace user `ashish.bhagat@korrali.com`. getkorrali.com is a secondary domain in the korrali.com Workspace, so `ashish@getkorrali.com` is an alias of this account: cold mail is sent as the alias and replies land in this inbox. getkorrali.com has its own SPF/DKIM/DMARC, so sending reputation stays on getkorrali.com, not korrali.com.
+For the dedicated Workspace user `ashish.bhagat@getkorrali.com` (its own mailbox, separate from the korrali.com account). `ashish@getkorrali.com` is an alias of it: cold mail is sent as the alias and replies land in this inbox. getkorrali.com has its own SPF/DKIM/DMARC, so cold-email reputation never touches korrali.com.
 
 1. Admin console → Security → Authentication → 2-Step Verification → allow users to turn it on.
 2. Sign in as that user → myaccount.google.com → Security → turn on 2-Step Verification.
@@ -36,13 +36,10 @@ For the Workspace user `ashish.bhagat@korrali.com`. getkorrali.com is a secondar
 6. Admin console → Apps → Google Workspace → Gmail → Authenticate email → getkorrali.com must say
    "Authenticating email with DKIM" (click Start authentication if not).
 
-Risk: cold mail runs through the main korrali.com account. If spam complaints ever show up, move
-cold sending to a dedicated getkorrali.com user so the main inbox can't be restricted.
-
 ### 2. Server env (`~/growth/.env.production`)
 
 ```
-GMAIL_USER=ashish.bhagat@korrali.com    # the login from step 1
+GMAIL_USER=ashish.bhagat@getkorrali.com # the login from step 1
 GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 GROWTH_FROM_NAME=Ashish Bhagat            # a person, not "The Korrali Team" — emails are signed "Ashish"
 GROWTH_FROM_EMAIL=ashish@getkorrali.com   # alias of GMAIL_USER (needs step 5)
