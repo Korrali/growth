@@ -20,6 +20,32 @@ export interface QualityGateResult {
   blockedReasons: string[];
 }
 
+const BANNED_PHRASES: RegExp[] = [
+  /\bI noticed\b/i,
+  /\bI don['’]t see any mention\b/i,
+  /\b(many|most) (growing |subscription[- ]?|saas |b2b )*(teams|companies|founders|platforms|businesses)\b/i,
+  /\bjust checking\b/i,
+  /\bany thoughts\b/i,
+  /\bcircling back\b/i,
+  /\bhope (you['’]re|this finds you) well\b/i,
+  /\bI['’]d love to\b/i,
+  /\banother common leak\b/i,
+  /\bI haven['’]t heard back\b/i,
+  /\bquick (check|follow)[- ]?(back|up)?\b/i,
+];
+
+/** Deterministic checks the critics panel kept letting through. */
+export function lintDraft(text: string): string[] {
+  const problems: string[] = [];
+  for (const re of BANNED_PHRASES) {
+    const m = text.match(re);
+    if (m) problems.push(`banned phrase "${m[0]}"`);
+  }
+  const money = text.match(/\$\d[\d,.]*[-‐-― ]?(person|people|employee|employees|staff|member)/i);
+  if (money) problems.push(`headcount written as money "${money[0]}"`);
+  return problems;
+}
+
 export function checkQualityGates(
   step: GeneratedStep,
   fitScore: number,
@@ -72,6 +98,8 @@ REPLY RATE (the only metric — a reply is the goal, not a click):
 - End every step with ONE question they can answer in a few words — yes/no, a number, or a name. Good: "Who on your team chases invoices that are still unpaid after Stripe's retries?" Bad: "How are you currently surfacing those gaps?"
 - Banned anywhere: "I noticed", "I don't see any mention", "many teams", "most teams", "just checking", "any thoughts", "circling back", "hope you're well", "I'd love to".
 - Step 4: offer to stop, and ask who the right person is if it isn't them.
+- Match the problem to how THEY bill. Renewals, plans, retired prices and coupons only apply to subscription businesses; for one-off payments (bookings, rentals, marketplaces, e-commerce) talk about failed payments, unpaid invoices and duplicate charges instead.
+- Never state numbers about them that are not in the input. teamSize is a headcount, not money.
 
 ${profile.outboundOffer ? `THE OFFER (every step builds toward this one ask):
 - ${profile.outboundOffer.offer}
@@ -139,7 +167,8 @@ export async function generateEmailSequence(input: {
       name: outreach.company?.name,
       domain: outreach.company?.domain,
       industry: outreach.company?.industry,
-      employeeCount: outreach.company?.employeeCount,
+      // A bare number here came back as "$37-person team"; say what it is.
+      teamSize: outreach.company?.employeeCount ? `${outreach.company.employeeCount} employees` : null,
       detectedTechs: outreach.company?.detectedTechs ?? [],
       painHypothesis: outreach.company?.painHypothesis,
       trigger: outreach.company?.trigger,
@@ -165,27 +194,36 @@ export async function generateEmailSequence(input: {
   let qualityGatesJson: Record<string, unknown> | null = null;
 
   try {
-    const response = await anthropic.messages.create({
-      model: WRITING_MODEL,
-      max_tokens: 2048,
-      system: systemPromptFor(campaign.product),
-      messages: [
-        {
-          role: "user",
-          content: `Generate a 4-step email sequence:\n${JSON.stringify(inputData, null, 2)}`,
-        },
-      ],
-      output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
-    });
+    // Rules in a prompt are requests; the lint below is enforcement. A draft
+    // that still uses banned filler or a money-formatted headcount is sent
+    // back once with the exact problems listed.
+    const userPrompt = `Generate a 4-step email sequence:\n${JSON.stringify(inputData, null, 2)}`;
+    let parsed: GeneratedStep[] = [];
+    let feedback = "";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await anthropic.messages.create({
+        model: WRITING_MODEL,
+        max_tokens: 2048,
+        system: systemPromptFor(campaign.product),
+        messages: [{ role: "user", content: userPrompt + feedback }],
+        output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
+      });
 
-    const block = response.content.find((b) => b.type === "text");
-    if (!block || block.type !== "text") throw new Error("No text block");
+      const block = response.content.find((b) => b.type === "text");
+      if (!block || block.type !== "text") throw new Error("No text block");
 
-    const rawParsed = JSON.parse(block.text) as
-      | GeneratedStep[]
-      | { steps?: GeneratedStep[] };
-    const parsed = Array.isArray(rawParsed) ? rawParsed : (rawParsed.steps ?? []);
-    if (parsed.length === 0) throw new Error("Empty step array from model");
+      const rawParsed = JSON.parse(block.text) as
+        | GeneratedStep[]
+        | { steps?: GeneratedStep[] };
+      parsed = Array.isArray(rawParsed) ? rawParsed : (rawParsed.steps ?? []);
+      if (parsed.length === 0) throw new Error("Empty step array from model");
+
+      const problems = parsed.flatMap((step) =>
+        lintDraft(`${step.subject}\n${step.body}`).map((p) => `step ${step.stepNumber}: ${p}`),
+      );
+      if (problems.length === 0) break;
+      feedback = `\n\nYour previous draft broke these rules — rewrite all 4 steps without them:\n- ${problems.join("\n- ")}`;
+    }
     outputData = parsed;
 
     // Run quality gates (including critics review) and write drafts
