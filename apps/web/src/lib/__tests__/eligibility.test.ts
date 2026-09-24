@@ -13,6 +13,9 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+const { mockCheckSendBudget } = vi.hoisted(() => ({ mockCheckSendBudget: vi.fn() }));
+vi.mock("@/lib/sending/send-budget", () => ({ checkSendBudget: mockCheckSendBudget }));
+
 import { prisma } from "@/lib/db";
 import { checkSendEligibility } from "@/lib/sending/eligibility";
 
@@ -62,6 +65,7 @@ function mockAll() {
   vi.mocked(prisma.emailMessage.count).mockResolvedValue(0);
   vi.mocked(prisma.contact.findMany).mockResolvedValue([]);
   vi.mocked(prisma.emailGenerationRun.findFirst).mockResolvedValue(null);
+  mockCheckSendBudget.mockResolvedValue({ allowed: true });
 }
 
 beforeEach(() => {
@@ -172,8 +176,8 @@ describe("checkSendEligibility", () => {
     expect(result.reason).toBe("already_sent_this_step");
   });
 
-  it("Gate 7: blocks when daily send limit is reached", async () => {
-    vi.mocked(prisma.emailMessage.count).mockResolvedValue(20 as never);
+  it("Gate 7: blocks when the daily send budget is used up", async () => {
+    mockCheckSendBudget.mockResolvedValue({ allowed: false, reason: "daily_limit_reached:campaign:18/18" });
     const result = await checkSendEligibility("outreach-1", 1);
     expect(result.eligible).toBe(false);
     expect(result.reason).toContain("daily_limit_reached");
@@ -181,10 +185,7 @@ describe("checkSendEligibility", () => {
 
   it("Gate 8: blocks when per-domain limit is reached", async () => {
     vi.mocked(prisma.contact.findMany).mockResolvedValue([{ id: "c1" }] as never);
-    // First count (daily total) = 0; second count (domain) = 1
-    vi.mocked(prisma.emailMessage.count)
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(1);
+    vi.mocked(prisma.emailMessage.count).mockResolvedValueOnce(1); // domain
     const result = await checkSendEligibility("outreach-1", 1);
     expect(result.eligible).toBe(false);
     expect(result.reason).toContain("per_domain_limit_reached");
@@ -192,7 +193,6 @@ describe("checkSendEligibility", () => {
 
   it("Gate 9: blocks when max follow-ups are exceeded", async () => {
     vi.mocked(prisma.emailMessage.count)
-      .mockResolvedValueOnce(0)  // daily
       .mockResolvedValueOnce(0)  // domain
       .mockResolvedValueOnce(4); // sent steps
     const result = await checkSendEligibility("outreach-1", 1);

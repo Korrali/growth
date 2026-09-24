@@ -1,3 +1,7 @@
+> **Superseded 2026-09-24:** cold mail now sends from the Google Workspace mailbox (SMTP/IMAP), not
+> Resend, and daily volume is automatic — `MAX_SENDS_PER_DAY` is no longer read. See
+> [SALES_MACHINE.md](SALES_MACHINE.md) and `apps/web/src/lib/sending/send-budget.ts`. Kept for history.
+
 # Outbound Deliverability Runbook
 
 **Audit date:** 2026-07-07 · **Status 2026-07-07 (night): ✅ COMPLETE — getkorrali.com verified and live; warming phase 1 (10/day) in effect.**

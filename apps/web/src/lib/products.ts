@@ -53,8 +53,11 @@ export const PRODUCTS: Record<MarketedProduct, ProductProfile> = {
     name: "Korrali Trust",
     brand: "Korrali",
     url: "https://trust.korrali.com",
+    // Claims stay workflow-level (see positioning doctrine): it drafts answers
+    // from the company's own documents for a human to approve. Never claim it
+    // certifies, makes anyone compliant, or wins deals.
     oneLiner:
-      "Compliance and trust workspace — answer security questionnaires in minutes, generate SOC2/ISO27001 policy docs, and publish a public trust page.",
+      "A workspace for answering enterprise security questionnaires: upload the questionnaire spreadsheet and your existing security docs, and it drafts answers with the source cited for each, flags what it can't support instead of guessing, and exports back into the original spreadsheet for your team to review and approve. Also covers the AI section (models, training data, oversight), policy drafts, and a public trust page. 14-day free trial, no card (up to 150 drafted answers); then $599/mo or $5,990/yr with unlimited questionnaires.",
     icp: `STRONGEST fit (score 8–10): AI-native B2B companies — they ship AI/LLM features (AI product, agents, copilots, ML models) AND sell to enterprise or mid-market. Their security reviews now include AI-specific sections (model inventory, training data provenance, EU AI Act risk classification, AI incident response) that block deals, and EU AI Act enforcement began August 2, 2026. If a company both ships AI and sells upmarket, score it 8+.
 
 Good fit (score 6–10): Any B2B company that sells to enterprise OR mid-market (100+ employee buyers) and therefore faces vendor security reviews as a result. The real trigger is "sells to enterprise/mid-market buyers," not "is SaaS" — cloud or on-prem software, IT/managed service providers, data processors, fintechs, and any other B2B company that touches an enterprise customer's data or systems gets the same questionnaires a SaaS company does. Stronger signals: named enterprise/mid-market customers on their website, an "enterprise" pricing tier, a careers page showing they're hiring sales engineers or solutions engineers, recent funding (seed to series B), building integrations for enterprise tools (SSO, SAML, SCIM, Salesforce). Even stronger: mentions of SOC2 in progress, security page exists but is thin, no trust center yet.
@@ -81,6 +84,13 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
     ],
     outboundViable: true,
     seoCta: "Start your free trial at trust.korrali.com",
+    outboundOffer: {
+      offer:
+        "Try it on the next questionnaire they actually have to answer: 14-day free trial, no card — upload it with their existing security docs and see cited draft answers in their original spreadsheet.",
+      link: "https://trust.korrali.com",
+    },
+    replyCta:
+      "Start the free trial at https://trust.korrali.com (14 days, no card) and run it on the questionnaire they have due now; offer a 15-minute walkthrough of the drafted answers once it has run.",
     topicSourcing: "community",
   },
 

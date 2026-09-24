@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mail/transport";
+import { globalDailyCap } from "@/lib/sending/send-budget";
 
 // The founder's morning sheet. One email, same shape every day: what went
 // out, who wrote back, what needs a human today, and anything broken. The
@@ -11,6 +12,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const NEEDS_FOUNDER = ["INTERESTED", "OBJECTION", "NOT_NOW", "WRONG_PERSON", "OTHER"] as const;
 const LOW_FUEL_DAYS = 5;
 const BOUNCE_ALARM_RATE = 0.03;
+// Above this, the digest pulls the emergency stop itself: a list that bounces
+// this much is damaging the sending domain faster than a human would notice.
+const BOUNCE_BRAKE_RATE = 0.05;
+const BOUNCE_BRAKE_MIN_SENDS = 20;
 
 export interface DigestData {
   sent: number;
@@ -31,6 +36,8 @@ export interface DigestData {
   activeCampaigns: string[];
   emergencyStop: boolean;
   totals: { sent: number; replied: number; interested: number };
+  /** Set when this digest run pulled the emergency stop (bounce brake). */
+  autoPaused?: boolean;
 }
 
 /**
@@ -110,8 +117,6 @@ export async function collectDigest(now = new Date()): Promise<DigestData> {
     }
   }
 
-  const envCap = parseInt(process.env.MAX_SENDS_PER_DAY ?? "20", 10);
-  const campaignCap = Math.max(0, ...campaigns.map((c) => c.dailyLimit));
 
   return {
     sent: outbound.length,
@@ -120,17 +125,24 @@ export async function collectDigest(now = new Date()): Promise<DigestData> {
     needsYou,
     bounces,
     queued,
-    dailyCap: Math.min(envCap, campaignCap || envCap),
+    dailyCap: await globalDailyCap(now),
     activeCampaigns: campaigns.map((c) => c.name),
     emergencyStop: settings?.globalEmergencyStop ?? true,
     totals: { sent: totalsSent, replied: totalsReplied, interested: totalsInterested },
   };
 }
 
+export function shouldBrake(d: DigestData): boolean {
+  return !d.emergencyStop && d.sent >= BOUNCE_BRAKE_MIN_SENDS && d.bounces / d.sent > BOUNCE_BRAKE_RATE;
+}
+
 export function digestWarnings(d: DigestData, now = new Date()): string[] {
   const warnings: string[] = [];
+  if (d.autoPaused) {
+    warnings.push(`AUTO-PAUSED: bounce rate ${(100 * d.bounces / d.sent).toFixed(1)}% in the last 24h. The emergency stop is ON. Clean the list, then re-run setup with --start.`);
+  }
   const weekday = now.getUTCDay() !== 0 && now.getUTCDay() !== 1; // covers Mon–Fri US sends
-  if (d.emergencyStop) warnings.push("Emergency stop is ON — nothing is sending. Turn it off in Growth → Settings.");
+  if (d.emergencyStop && !d.autoPaused) warnings.push("Emergency stop is ON — nothing is sending. Turn it off in Growth → Settings.");
   if (d.activeCampaigns.length === 0) warnings.push("No ACTIVE campaign — nothing can send or enroll.");
   if (!d.emergencyStop && d.activeCampaigns.length > 0 && d.sent === 0 && weekday) {
     warnings.push("Zero emails sent in the last 24h on a weekday. Check the worker (pm2 logs growth-worker-prod) and mailbox credentials.");
@@ -178,12 +190,11 @@ export function renderDigest(d: DigestData, now = new Date()): { subject: string
   lines.push(`  All time: ${d.totals.sent} cold emails · ${d.totals.replied} replied · ${d.totals.interested} interested`);
   lines.push("");
 
-  lines.push("THE DAILY ROUTINE");
-  lines.push("  1. Answer every NEEDS YOU line above (INTERESTED first — within 2 hours).");
-  lines.push("  2. LinkedIn: connect with 20 founders from yesterday's sends (no pitch in the note).");
-  lines.push("  3. Anyone who installed: book a 15-min findings walkthrough.");
-  lines.push("  4. Nothing else. The machine does the rest.");
-
+  lines.push("YOUR PART (optional — the machine runs without it)");
+  lines.push("  - INTERESTED replies already get the AI answer with the link after 2h. Reply yourself first if you want.");
+  lines.push("  - Objections / not now / wrong person: answer if you like.");
+  lines.push("  - Anyone who installed or started a trial: offer a 15-minute walkthrough.");
+  lines.push("");
   return { subject, text: lines.join("\n") };
 }
 
@@ -191,6 +202,15 @@ export async function sendDailyDigest(now = new Date()): Promise<void> {
   const founder = process.env.FOUNDER_EMAIL;
   if (!founder) return;
   const data = await collectDigest(now);
+  if (shouldBrake(data)) {
+    await prisma.growthSettings.upsert({
+      where: { id: "global" },
+      create: { id: "global", globalEmergencyStop: true },
+      update: { globalEmergencyStop: true },
+    });
+    data.emergencyStop = true;
+    data.autoPaused = true;
+  }
   const { subject, text } = renderDigest(data, now);
   await sendMail({
     from: process.env.EMAIL_FROM ?? "growth@korrali.com",

@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ prisma: {} }));
 vi.mock("@/lib/mail/transport", () => ({ sendMail: vi.fn() }));
+vi.mock("@/lib/sending/send-budget", () => ({ globalDailyCap: vi.fn() }));
 
-const { digestWarnings, renderDigest } = await import("@/lib/digest/daily-digest");
+const { digestWarnings, renderDigest, shouldBrake } = await import("@/lib/digest/daily-digest");
 type DigestData = Parameters<typeof renderDigest>[0];
 
 const WEDNESDAY = new Date("2026-09-23T02:30:00Z");
@@ -68,10 +69,26 @@ describe("renderDigest", () => {
     );
     expect(subject).toBe("Growth 2026-09-23: 30 sent · 1 need you · 1 interested");
     expect(text).toContain("[INTERESTED] Jane Doe — Acme <jane@acme.com> [auto-reply queued 15:00 UTC]");
-    expect(text).toContain("THE DAILY ROUTINE");
+    expect(text).toContain("YOUR PART");
   });
 
   it("marks the subject when something needs fixing", () => {
     expect(renderDigest(data({ emergencyStop: true }), WEDNESDAY).subject.startsWith("⚠ ")).toBe(true);
+  });
+});
+
+describe("bounce brake", () => {
+  it("pulls the stop above 5% bounces once there is enough volume", () => {
+    expect(shouldBrake(data({ sent: 30, bounces: 2 }))).toBe(true);
+    expect(shouldBrake(data({ sent: 30, bounces: 1 }))).toBe(false);
+    expect(shouldBrake(data({ sent: 10, bounces: 3 }))).toBe(false);
+    expect(shouldBrake(data({ sent: 30, bounces: 5, emergencyStop: true }))).toBe(false);
+  });
+
+  it("says so at the top of the digest", () => {
+    const { subject, text } = renderDigest(data({ sent: 30, bounces: 3, emergencyStop: true, autoPaused: true }), WEDNESDAY);
+    expect(subject.startsWith("⚠ ")).toBe(true);
+    expect(text).toContain("AUTO-PAUSED: bounce rate 10.0%");
+    expect(text).not.toContain("Emergency stop is ON — nothing is sending");
   });
 });

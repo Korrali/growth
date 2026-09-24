@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { isEmailSuppressed, isDomainSuppressed, extractDomain } from "@/lib/sending/suppression";
 import { EmailStatus, OutreachStatus, CampaignStatus } from "@prisma/client";
 import { PRODUCTS, type MarketedProduct } from "@/lib/products";
+import { checkSendBudget } from "@/lib/sending/send-budget";
 
 export interface EligibilityResult {
   eligible: boolean;
@@ -117,19 +118,10 @@ export async function checkSendEligibility(
   });
   if (existingMessage) return ineligible("already_sent_this_step");
 
-  // Gate 7: Daily send limit
-  // The campaign dailyLimit is the operational knob for warming, but
-  // MAX_SENDS_PER_DAY is a HARD CEILING, not a default. DELIVERABILITY_RUNBOOK.md
-  // states "set per-campaign dailyLimit instead so the global cap stays as
-  // backstop" — with `??` that was never true: any campaign dailyLimit silently
-  // replaced the env cap, so a mis-set campaign could ramp straight past the
-  // warming schedule with nothing to stop it. Clamp instead.
-  const globalDailyCap = getEnvInt("MAX_SENDS_PER_DAY", 20);
-  const dailyLimit = Math.min(outreach.campaign.dailyLimit ?? globalDailyCap, globalDailyCap);
-  const todaySends = await prisma.emailMessage.count({
-    where: { direction: "OUTBOUND", sentAt: { gte: todayBucketStart() } },
-  });
-  if (todaySends >= dailyLimit) return ineligible(`daily_limit_reached:${todaySends}/${dailyLimit}`);
+  // Gate 7: Daily send budget — warm-up total, split across active campaigns
+  // (send-budget.ts).
+  const budget = await checkSendBudget(outreach.campaign.id);
+  if (!budget.allowed) return ineligible(budget.reason ?? "daily_limit_reached");
 
   // Gate 8: Per-domain daily limit
   const perDomainLimit = outreach.campaign.perDomainLimit ?? getEnvInt("MAX_SENDS_PER_DOMAIN_PER_DAY", 1);

@@ -296,7 +296,7 @@ async function main() {
 
   // Every 2 hours: auto-enroll fit ≥6 companies into the matching active
   // internal campaign (finds contacts first where missing). Send volume is
-  // still governed by campaign dailyLimit + MAX_SENDS_PER_DAY gates.
+  // still governed by the send budget (send-budget.ts).
   await boss.work("auto-enroll-check", async ([job]) => {
     if (!job) return;
     const summary = await runAutoEnroll();

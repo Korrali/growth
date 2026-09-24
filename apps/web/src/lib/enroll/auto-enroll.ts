@@ -10,7 +10,7 @@ import { CampaignStatus, EmailStatus, FitProduct } from "@prisma/client";
 // - one contact per company, one campaign per contact — a contact with ANY
 //   existing outreach is never enrolled again (no cross-campaign double-sends)
 // - enrollment is capped per run; actual send volume is governed downstream
-//   by the campaign dailyLimit + MAX_SENDS_PER_DAY eligibility gates
+//   by the send budget (warm-up total split across campaigns, send-budget.ts)
 // - only internal campaigns (clientId = null) are auto-enrolled
 
 const MAX_ENROLLMENTS_PER_RUN = 20;
