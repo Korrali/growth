@@ -125,6 +125,33 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
+const DISQUALIFYING =
+  /(is|are|they're)\s+(a\s+)?competitor|not\s+a\s+buyer|explicitly\s+excluded|been\s+acquired|acquired\s+by|subsidiary\s+of|shut\s+down|no\s+longer\s+(independent|operating)/i;
+
+/**
+ * A list the founder built in Apollo is already the targeting decision. The AI
+ * sees less than Apollo did (name, site, industry, keywords), so for those
+ * leads it researches and routes but does not gatekeep: a "weak fit" verdict
+ * still enrolls into the product the lead was imported for. Only a hard
+ * disqualifier — competitor, acquired/subsidiary, shut down — keeps a curated
+ * lead out. Discovered (non-Apollo) companies keep the normal score gate.
+ */
+export function applyCuratedListRule<T extends { fitProduct: string; fitScore: number; fitReasoning: string }>(
+  parsed: T,
+  acquisitionSource: string | null,
+  products: readonly string[],
+): T {
+  if (!acquisitionSource?.startsWith("apollo:") || products.length !== 1) return parsed;
+  if (DISQUALIFYING.test(parsed.fitReasoning ?? "")) return parsed;
+  if (parsed.fitProduct !== "REJECT" && parsed.fitScore >= 6) return parsed;
+  return {
+    ...parsed,
+    fitProduct: products[0]!,
+    fitScore: Math.max(parsed.fitScore, 6),
+    fitReasoning: `[curated Apollo list — enrolled despite AI verdict ${parsed.fitProduct} ${parsed.fitScore}] ${parsed.fitReasoning ?? ""}`,
+  };
+}
+
 export interface ScoreFitOptions {
   /**
    * Score against these products only. Set for list imports built for one
@@ -246,15 +273,13 @@ export async function scoreFitForCompany(
     // "they are a competitor ... not a buyer" scored 7/TRUST for Kolide —
     // a 1Password subsidiary — and nearly got cold-emailed). When the
     // model's own reasoning disqualifies the company, trust the reasoning.
-    const DISQUALIFYING =
-      /(is|are|they're)\s+(a\s+)?competitor|not\s+a\s+buyer|explicitly\s+excluded|been\s+acquired|acquired\s+by|subsidiary\s+of|shut\s+down|no\s+longer\s+(independent|operating)/i;
     if (parsed.fitScore >= 6 && DISQUALIFYING.test(parsed.fitReasoning ?? "")) {
       parsed.fitProduct = FitProduct.REJECT;
       parsed.fitScore = Math.min(parsed.fitScore, 3);
       parsed.fitReasoning = `[auto-REJECT: reasoning contradicts score] ${parsed.fitReasoning}`;
     }
 
-    outputData = parsed;
+    outputData = applyCuratedListRule(parsed, company.acquisitionSource, keys);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
     throw err;

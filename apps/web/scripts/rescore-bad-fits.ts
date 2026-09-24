@@ -8,7 +8,8 @@
  * invalid fitProduct]"), writing off real companies. This clears those scores,
  * cancels any queued cross-use re-score for them, and queues a fresh score for
  * the product the company was imported for (Stripe billers → Revenue, others →
- * Trust), with the other product as the fallback.
+ * Trust), with the other product as the fallback. Also re-scores curated
+ * Apollo leads rejected as a "weak fit" before applyCuratedListRule existed.
  */
 import { readFileSync } from "fs";
 
@@ -27,7 +28,14 @@ async function main() {
 
   const { prisma } = await import("@/lib/db");
   const bad = await prisma.company.findMany({
-    where: { fitReasoning: { startsWith: "[auto-REJECT: model returned invalid" } },
+    where: {
+      OR: [
+        { fitReasoning: { startsWith: "[auto-REJECT: model returned invalid" } },
+        // Curated Apollo leads rejected as a "weak fit" before the curated-list
+        // rule existed; re-scoring runs them through it (hard rejects stay out).
+        { acquisitionSource: { startsWith: "apollo:" }, fitProduct: "REJECT" },
+      ],
+    },
     select: { id: true, name: true, detectedTechs: true },
   });
   console.log(`companies with a broken-AI reject: ${bad.length}`);
