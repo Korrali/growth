@@ -16,8 +16,8 @@ rather than per call site.
 
 | Tier | Primary | FB1 | FB2 |
 |---|---|---|---|
-| BULK / cheap (`CLAUDE_MODELS.default` / `.cheap`) | Groq `openai/gpt-oss-20b` | Gemini `gemini-flash-lite-latest` | Groq `llama-3.1-8b-instant` |
-| WRITING / HIGH_INTENT / premium (`CLAUDE_MODELS.premium`) | Groq `openai/gpt-oss-120b` | Gemini `gemini-3.6-flash` | Groq `llama-3.3-70b-versatile` |
+| BULK / cheap (`CLAUDE_MODELS.default` / `.cheap`) | Groq `openai/gpt-oss-20b` | Gemini `gemini-flash-lite-latest` | Groq `qwen/qwen3.8-27b` (Llama retired on Groq 2026-09) |
+| WRITING / HIGH_INTENT / premium (`CLAUDE_MODELS.premium`) | Groq `openai/gpt-oss-120b` | Gemini `gemini-3.6-flash` | Groq `qwen/qwen3.8-27b` |
 
 FB2 is always a different *model family* from the primary (Llama, not gpt-oss) — a bad
 gpt-oss rollout on Groq is a different failure mode from a Groq outage, and this chain

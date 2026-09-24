@@ -43,8 +43,22 @@ function nextGeminiKey(): string {
   return key;
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Callers pass Anthropic-style structured output (output_config.format.schema).
+// Groq's json_object mode and Gemini's JSON mime type only guarantee *some*
+// JSON — neither ever saw the schema, so models invented field names
+// ("fit_product") and every such answer failed validation downstream (fit
+// scoring rejected real companies as "invalid fitProduct"). Put the schema in
+// the system prompt so every provider knows the exact shape.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function jsonSchemaInstruction(params: any): string {
+  const schema = (params.output_config as { format?: { schema?: unknown } } | undefined)?.format?.schema;
+  if (!schema) return "";
+  return `\n\nRespond with ONLY a JSON object that matches this JSON Schema exactly — same property names, same casing, only the allowed enum values, every required property present:\n${JSON.stringify(schema)}`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callGemini(model: string, params: any) {
-  const systemText = flattenSystem(params.system);
+  const systemText = flattenSystem(params.system) + jsonSchemaInstruction(params);
   const userText = ((params.messages as Array<{ role: string; content: unknown }>) ?? [])
     .map((m) => flattenContent(m.content))
     .filter(Boolean)
@@ -86,7 +100,7 @@ export type ClaudeModel = (typeof CLAUDE_MODELS)[keyof typeof CLAUDE_MODELS];
 // not to translate between vendors.
 function toGroqModel(model: string): string {
   if (model === CLAUDE_MODELS.premium || model.includes("gpt-oss-120b")) return CLAUDE_MODELS.premium;
-  if (model.includes("8b-instant")) return "llama-3.1-8b-instant";
+  if (model.includes("8b-instant")) return CLAUDE_MODELS.cheap; // retired on Groq
   return CLAUDE_MODELS.default;
 }
 
@@ -99,8 +113,12 @@ function toGeminiModel(model: string): string {
 
 // Last-resort Groq rescue — a different model family (Llama, not gpt-oss) in
 // case gpt-oss itself is the bad rollout, not just the host.
-function toGroqRescueModel(model: string): string {
-  return model === CLAUDE_MODELS.premium ? "llama-3.3-70b-versatile" : "llama-3.1-8b-instant";
+// Groq retired its Llama text models (llama-3.1-8b-instant 404'd in prod on
+// 2026-09-24, and no llama-* chat model is left in /v1/models); Qwen is the
+// remaining non-gpt-oss family there.
+export const GROQ_RESCUE_MODEL = "qwen/qwen3.8-27b";
+function toGroqRescueModel(_model: string): string {
+  return GROQ_RESCUE_MODEL;
 }
 
 function flattenSystem(system: unknown): string {
@@ -174,7 +192,7 @@ async function callOpenAICompatible(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: any,
 ) {
-  const systemText = flattenSystem(params.system);
+  const systemText = flattenSystem(params.system) + jsonSchemaInstruction(params);
   const msgs: OpenAI.Chat.ChatCompletionMessageParam[] = [];
   if (systemText) msgs.push({ role: "system", content: systemText });
 
@@ -184,11 +202,19 @@ async function callOpenAICompatible(
 
   const needsJson = !!(params.output_config as { format?: unknown } | undefined)?.format;
 
+  // gpt-oss is a reasoning model: its thinking tokens count against
+  // max_tokens. At the 512 many callers ask for, it ran out before writing the
+  // answer and Groq returned "Failed to generate JSON". Keep reasoning short and
+  // leave room for it.
+  const gptOss = model.includes("gpt-oss");
+  const reasoning = gptOss || model.includes("qwen");
+  const requested = (params.max_tokens as number) ?? 1024;
   const completion = await client.chat.completions.create({
     model,
-    max_tokens: (params.max_tokens as number) ?? 1024,
+    max_tokens: reasoning ? Math.max(requested, 2048) : requested,
     messages: msgs,
     temperature: params.temperature as number | undefined,
+    ...(gptOss ? { reasoning_effort: "low" as const } : {}),
     ...(needsJson ? { response_format: { type: "json_object" as const } } : {}),
   });
 
@@ -258,7 +284,7 @@ function providerDownAlert(name: ProviderName, hard: boolean, detail: string): v
     `Error: ${detail}`,
     ``,
     hard
-      ? `Action needed: top up or fix the ${name} account/key. The engine has fallen back to the next free-tier provider in the chain (Groq gpt-oss -> Gemini -> Groq llama), but this tier won't recover on its own.`
+      ? `Action needed: top up or fix the ${name} account/key. The engine has fallen back to the next free-tier provider in the chain (Groq gpt-oss -> Gemini -> Groq qwen), but this tier won't recover on its own.`
       : `Usually self-heals after the cooldown — monitoring only, no action expected.`,
   ].join("\n");
 

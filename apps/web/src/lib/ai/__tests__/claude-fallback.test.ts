@@ -62,13 +62,13 @@ describe("Growth claude.ts fallback chain", () => {
     geminiGenerateContent.mockRejectedValue(new Error("gemini down"));
     openaiCreate.mockImplementation((_baseURL: string, params: { model: string }) => {
       if (params.model === "openai/gpt-oss-20b") throw new Error("groq gpt-oss down");
-      return Promise.resolve({ choices: [{ message: { content: "from-groq-llama" } }], usage: {}, model: "llama-3.1-8b-instant" });
+      return Promise.resolve({ choices: [{ message: { content: "from-groq-qwen" } }], usage: {}, model: "qwen/qwen3.8-27b" });
     });
     const { anthropic } = await import("../claude");
     const res = await anthropic.messages.create({ model: "openai/gpt-oss-20b", messages: [{ role: "user", content: "hi" }] });
-    expect(res.content[0].text).toBe("from-groq-llama");
+    expect(res.content[0].text).toBe("from-groq-qwen");
     expect(openaiCreate).toHaveBeenCalledTimes(2);
-    expect(openaiCreate.mock.calls[1][1].model).toBe("llama-3.1-8b-instant");
+    expect(openaiCreate.mock.calls[1][1].model).toBe("qwen/qwen3.8-27b");
   });
 
   it("premium tier (gpt-oss-120b) routes its fallbacks to the premium sibling model, not the cheap one", async () => {
@@ -80,8 +80,9 @@ describe("Growth claude.ts fallback chain", () => {
     ).rejects.toThrow();
     // Gemini fallback used the premium sibling (gemini-3.6-flash), not flash-lite.
     expect(geminiGenerateContent.mock.calls[0][0]).toBe("gemini-3.6-flash");
-    // Groq rescue used the premium Llama sibling (70b), not the 8b cheap tier.
-    expect(openaiCreate.mock.calls[1][1].model).toBe("llama-3.3-70b-versatile");
+    // Groq rescue: Qwen, the only non-gpt-oss chat family Groq still serves
+    // (its Llama models were retired), for both tiers.
+    expect(openaiCreate.mock.calls[1][1].model).toBe("qwen/qwen3.8-27b");
   });
 
   it("throws when Groq, Gemini, and Groq-rescue all fail — never silently reaches for a paid vendor", async () => {
@@ -109,5 +110,45 @@ describe("Growth claude.ts fallback chain", () => {
     // ...but Groq was only hit ONCE — the breaker skipped it the second time.
     expect(openaiCreate).toHaveBeenCalledTimes(1);
     expect(geminiGenerateContent).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("structured output reaches every provider", () => {
+  const SCHEMA = {
+    type: "object",
+    properties: { fitProduct: { type: "string", enum: ["REVENUE", "REJECT"] }, fitScore: { type: "number" } },
+    required: ["fitProduct", "fitScore"],
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    openaiCreate.mockReset();
+    geminiGenerateContent.mockReset();
+    process.env.GROQ_API_KEY = "test-key";
+    process.env.GEMINI_API_KEY = "test-key";
+    delete process.env.MOCK_AI;
+  });
+
+  it("puts the JSON schema in Groq's system prompt and gives gpt-oss room to reason", async () => {
+    openaiCreate.mockResolvedValue({ choices: [{ message: { content: "{}" } }], model: "openai/gpt-oss-20b" });
+    const { anthropic, CLAUDE_MODELS } = await import("@/lib/ai/claude");
+    await anthropic.messages.create({
+      model: CLAUDE_MODELS.cheap,
+      max_tokens: 512,
+      system: "Score it.",
+      messages: [{ role: "user", content: "Acme" }],
+      output_config: { format: { type: "json_schema", schema: SCHEMA } },
+    });
+    const [, params] = openaiCreate.mock.calls[0]!;
+    expect(params.messages[0].content).toContain('"fitProduct"');
+    expect(params.messages[0].content).toContain("matches this JSON Schema exactly");
+    expect(params.max_tokens).toBeGreaterThanOrEqual(2048);
+    expect(params.reasoning_effort).toBe("low");
+    expect(params.response_format).toEqual({ type: "json_object" });
+  });
+
+  it("adds nothing when the caller wants plain text", async () => {
+    const { jsonSchemaInstruction } = await import("@/lib/ai/claude");
+    expect(jsonSchemaInstruction({ messages: [] })).toBe("");
   });
 });

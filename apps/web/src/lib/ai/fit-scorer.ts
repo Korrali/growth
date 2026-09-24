@@ -224,14 +224,18 @@ export async function scoreFitForCompany(
     if (!block || block.type !== "text") throw new Error("No text block in response");
 
     const parsed = JSON.parse(block.text) as FitScoreResult;
+    parsed.fitProduct = String(parsed.fitProduct ?? "").trim().toUpperCase() as FitScoreResult["fitProduct"];
+    parsed.fitScore = Number(parsed.fitScore);
 
-    // Validate enum. Groq doesn't hard-enforce json_schema enums and the
-    // cheap model sometimes omits or invents fitProduct — degrade to REJECT
-    // (a failed job would just retry into the same output and burn TPD budget).
+    // A malformed answer is a failed call, not a verdict. This used to degrade
+    // to REJECT, which silently wrote off real companies whenever a provider
+    // returned the wrong shape; throwing lets the job retry, and a company whose
+    // scoring keeps failing stays unscored instead of rejected.
     if (!Object.values(FitProduct).includes(parsed.fitProduct as FitProduct)) {
-      parsed.fitProduct = FitProduct.REJECT;
-      parsed.fitScore = Math.min(parsed.fitScore ?? 1, 5);
-      parsed.fitReasoning = `[auto-REJECT: model returned invalid fitProduct] ${parsed.fitReasoning ?? ""}`;
+      throw new Error(`model returned invalid fitProduct: ${JSON.stringify(parsed.fitProduct)}`);
+    }
+    if (!Number.isFinite(parsed.fitScore)) {
+      throw new Error(`model returned invalid fitScore: ${JSON.stringify(parsed.fitScore)}`);
     }
     if (parsed.fitScore < 1 || parsed.fitScore > 10) {
       throw new Error(`fitScore out of range: ${parsed.fitScore}`);
