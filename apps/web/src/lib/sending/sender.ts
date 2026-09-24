@@ -8,6 +8,7 @@ import { PRODUCTS } from "@/lib/products";
 import { verifyEmail } from "@/lib/import/email-verifier";
 import { enqueueEmailGenerate } from "@/lib/queue";
 import { sendMail } from "@/lib/mail/transport";
+import { withSignOff } from "@/lib/sending/sender-identity";
 
 // How many times a step may abort for a missing draft before the sequence is
 // stopped for good. Each attempt is an hour apart, so this is a ~3 hour window
@@ -237,7 +238,7 @@ export async function sendOutreachStep(
   const unsubscribeUrl = `${appUrl}/unsubscribe?email=${emailB64}&token=${token}`;
   const footer = `\n\n---\nDon't want to hear from us? [Unsubscribe](${unsubscribeUrl})`;
 
-  const bodyWithUtm = injectUtmIntoText(draft.body, {
+  const bodyWithUtm = injectUtmIntoText(withSignOff(draft.body), {
     source:   "cold_email",
     medium:   "email",
     campaign: outreach.campaign.id,

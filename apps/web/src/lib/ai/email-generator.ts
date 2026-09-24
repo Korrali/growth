@@ -66,6 +66,13 @@ VOICE & FORMAT:
 - Subject lines: lowercase, punchy, 4-7 words max. No clickbait, no "quick question".
 ${signOffRule()}
 
+REPLY RATE (the only metric — a reply is the goal, not a click):
+- Step 1: 60 words max, 3–4 short sentences, plain text, no exclamation marks.
+- Sentence 1 connects something true about THEM (from the input: pricing tiers, seats/usage billing, annual plans, funding, team size, enterprise customers, AI features) to why the problem is likely for them — a reason, not a compliment.
+- End every step with ONE question they can answer in a few words — yes/no, a number, or a name. Good: "Who on your team chases invoices that are still unpaid after Stripe's retries?" Bad: "How are you currently surfacing those gaps?"
+- Banned anywhere: "I noticed", "I don't see any mention", "many teams", "most teams", "just checking", "any thoughts", "circling back", "hope you're well", "I'd love to".
+- Step 4: offer to stop, and ask who the right person is if it isn't them.
+
 ${profile.outboundOffer ? `THE OFFER (every step builds toward this one ask):
 - ${profile.outboundOffer.offer}
 - Step 1: NO links at all (links in a first cold email hurt inbox placement). Ask whether they want the link, or ask a question about how they catch these today.
