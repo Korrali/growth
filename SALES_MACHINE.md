@@ -25,7 +25,7 @@ Apollo CSV ──import──▶ scored by AI ──fit ≥ 6──▶ 4 persona
 | | Revenue | Trust |
 |---|---|---|
 | Who | Founders / finance at subscription companies billing through Stripe | CTOs, security, founders at B2B companies selling to enterprise |
-| Ask | Free install from the Stripe App Marketplace; uninstall if it finds nothing | 14-day free trial, no card, on the questionnaire they have due |
+| Ask | Free install from the Stripe App Marketplace; uninstall if it finds nothing; then $99/mo or 10% of recovered | First questionnaire free (no card, no time limit); then $299/mo founding price for the first 10 customers, $599/mo after |
 | Link | marketplace.stripe.com/apps/korrali-revenue-recovery | trust.korrali.com |
 | Campaign | Revenue — marketplace install (weight 60) | Trust — questionnaire trial (weight 40) |
 

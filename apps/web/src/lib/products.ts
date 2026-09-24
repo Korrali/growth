@@ -57,7 +57,7 @@ export const PRODUCTS: Record<MarketedProduct, ProductProfile> = {
     // from the company's own documents for a human to approve. Never claim it
     // certifies, makes anyone compliant, or wins deals.
     oneLiner:
-      "A workspace for answering enterprise security questionnaires: upload the questionnaire spreadsheet and your existing security docs, and it drafts answers with the source cited for each, flags what it can't support instead of guessing, and exports back into the original spreadsheet for your team to review and approve. Also covers the AI section (models, training data, oversight), policy drafts, and a public trust page. 14-day free trial, no card (up to 150 drafted answers); then $599/mo or $5,990/yr with unlimited questionnaires.",
+      "A workspace for answering enterprise security questionnaires: upload the questionnaire spreadsheet and your existing security docs, and it drafts answers with the source cited for each, flags what it can't support instead of guessing, and exports back into the original spreadsheet for your team to review and approve. Also covers the AI section (models, training data, oversight), policy drafts, and a public trust page. The first questionnaire is free (up to 150 drafted answers, no card, no time limit); then $299/mo founding price for the first 10 customers (locked in), $599/mo after that, with unlimited questionnaires.",
     icp: `STRONGEST fit (score 8–10): AI-native B2B companies — they ship AI/LLM features (AI product, agents, copilots, ML models) AND sell to enterprise or mid-market. Their security reviews now include AI-specific sections (model inventory, training data provenance, EU AI Act risk classification, AI incident response) that block deals, and EU AI Act enforcement began August 2, 2026. If a company both ships AI and sells upmarket, score it 8+.
 
 Good fit (score 6–10): Any B2B company that sells to enterprise OR mid-market (100+ employee buyers) and therefore faces vendor security reviews as a result. The real trigger is "sells to enterprise/mid-market buyers," not "is SaaS" — cloud or on-prem software, IT/managed service providers, data processors, fintechs, and any other B2B company that touches an enterprise customer's data or systems gets the same questionnaires a SaaS company does. Stronger signals: named enterprise/mid-market customers on their website, an "enterprise" pricing tier, a careers page showing they're hiring sales engineers or solutions engineers, recent funding (seed to series B), building integrations for enterprise tools (SSO, SAML, SCIM, Salesforce). Even stronger: mentions of SOC2 in progress, security page exists but is thin, no trust center yet.
@@ -86,11 +86,11 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
     seoCta: "Start your free trial at trust.korrali.com",
     outboundOffer: {
       offer:
-        "Try it on the next questionnaire they actually have to answer: 14-day free trial, no card — upload it with their existing security docs and see cited draft answers in their original spreadsheet.",
+        "Their first questionnaire is free — no card, no time limit — so they can run it on the next one a buyer actually sends: upload it with their existing security docs and get cited draft answers back in the original spreadsheet. After that, $299/mo founding price for the first 10 customers.",
       link: "https://trust.korrali.com",
     },
     replyCta:
-      "Start the free trial at https://trust.korrali.com (14 days, no card) and run it on the questionnaire they have due now; offer a 15-minute walkthrough of the drafted answers once it has run.",
+      "Sign up at https://trust.korrali.com — their first questionnaire is free (no card, no time limit) — and run it on the questionnaire they have due now; mention the $299/mo founding price for the first 10 customers only if they ask about cost, and offer a 15-minute walkthrough of the drafted answers once it has run.",
     topicSourcing: "community",
   },
 
@@ -111,7 +111,7 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
     // things it flags for review, not proven leakage — an archived price or a
     // long-running coupon can be an agreed deal term.
     oneLiner:
-      "A Stripe app (listed on the Stripe App Marketplace) that watches a subscription business's Stripe account for revenue that slips through: failed payments nobody retried, invoices stuck past due, charge-failure spikes, duplicate charges, subscriptions that stopped invoicing, customers still on a retired price, and coupons that never expired. Detection is free forever with no card; each finding shows the customer and dollar amount so it can be checked in the Stripe dashboard. Paying only unlocks acting on findings (retries, dunning, fixes) — first 3 recoveries free, then $99/mo under $25K MRR, $249/mo for $25K–$150K MRR, $499/mo above that, or 10% of what's recovered ($49/mo minimum).",
+      "A Stripe app (listed on the Stripe App Marketplace) that watches a subscription business's Stripe account for revenue that slips through: failed payments nobody retried, invoices stuck past due, charge-failure spikes, duplicate charges, subscriptions that stopped invoicing, customers still on a retired price, and coupons that never expired. Detection is free forever with no card; each finding shows the customer and dollar amount so it can be checked in the Stripe dashboard. Paying only unlocks acting on findings (retries, dunning, fixes) — first 3 recoveries free, then $99/mo, or pay only 10% of what's recovered ($49/mo minimum). Larger accounts: $249/mo ($25K–$150K MRR), $499/mo ($150K+ MRR).",
     icp: `GOOD FIT (score 7–9): independent subscription or usage-billed businesses that bill customers through Stripe — B2B/B2C SaaS, subscription apps, paid communities, memberships, course platforms — with roughly 10–200 employees. Pricing now scales from $99/mo, so small subscription companies are real customers, not just lead-gen: a 10–30 person SaaS on Stripe is a 7.
 Score 9–10 when there are signs of billing complexity or volume: multiple pricing tiers, seat/usage pricing, annual + monthly plans, discounts/coupons in use, recent funding, or a growing customer base without a finance/RevOps team.
 Score 6 when Stripe use or recurring billing is likely but not visible.
