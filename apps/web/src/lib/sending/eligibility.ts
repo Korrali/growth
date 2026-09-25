@@ -144,8 +144,10 @@ export async function checkSendEligibility(
   }
 
   // Gate 9: Max follow-ups not exceeded
+  // Sequence steps only — superseded first emails and auto-replies to
+  // interested prospects don't use up the follow-up budget.
   const sentSteps = await prisma.emailMessage.count({
-    where: { outreachId, direction: "OUTBOUND" },
+    where: { outreachId, direction: "OUTBOUND", stepNumber: { not: null } },
   });
   if (sentSteps > outreach.campaign.maxFollowUps) {
     return ineligible(`max_followups_exceeded:${sentSteps}`);

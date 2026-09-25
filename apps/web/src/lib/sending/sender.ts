@@ -276,7 +276,10 @@ export async function sendOutreachStep(
   // so the prospect sees one conversation, not four unrelated cold emails.
   const priorOutbound = stepNumber > 1
     ? await prisma.emailMessage.findMany({
-        where: { outreachId, direction: "OUTBOUND", rfcMessageId: { not: null } },
+        // Sequence steps only: an email that was superseded (stepNumber
+        // cleared by scripts/resend-first-email.ts) or an auto-reply must not
+        // become the thread root.
+        where: { outreachId, direction: "OUTBOUND", rfcMessageId: { not: null }, stepNumber: { not: null } },
         orderBy: { sentAt: "asc" },
         select: { subject: true, rfcMessageId: true },
       })
