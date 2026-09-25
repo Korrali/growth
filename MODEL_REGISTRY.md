@@ -40,3 +40,17 @@ call — see `providerDownAlert`.
 `MODEL_ALERT_EMAIL`), `AI_ALERT_FROM`, `RESEND_API_KEY`. `ANTHROPIC_API_KEY` /
 `OPENAI_API_KEY` may still be present in the environment (e.g. left over from before this
 fix) but are never read by the AI chain — nothing in `lib/ai/` references them post-fix.
+
+
+## Exception (2026-09-25, founder-approved): cold email lines on Claude Haiku
+
+Cold emails are a fixed template (`src/lib/sending/templates.ts`); the AI writes only two
+sentences per prospect (`src/lib/ai/email-generator.ts`). Those two sentences use
+**Claude `claude-haiku-4-5`** while the week's spend is under `HAIKU_WEEKLY_BUDGET_USD`
+(default **$1/week**, ISO week from Monday 00:00 UTC, tracked as AuditLog `ai.spend` rows —
+`src/lib/ai/haiku.ts`). At the cap, and without `ANTHROPIC_API_KEY`, they use the free chain
+above. Lines failing the checks twice are replaced by fixed fallback lines. Drafts are
+written just before sending, so the budget only pays for emails that go out
+(~$0.002 per prospect). A 2026-09-25 benchmark on the production prompt: Groq reproduced
+banned filler in every cold-email run; Haiku followed the rules far more often. Every other
+Growth row stays free-only.

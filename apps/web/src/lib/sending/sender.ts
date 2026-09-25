@@ -130,7 +130,9 @@ export async function sendOutreachStep(
   });
 
   if (!draft) {
-    // Live mode — no AI draft exists for this step.
+    // No draft yet. This is the normal path for a first email: drafts are
+    // written just before sending, not at enrollment (auto-enroll.ts), so the
+    // weekly Haiku budget only pays for emails that actually go out.
     //
     // This used to return without touching nextSendAt or the outreach status,
     // which left the record permanently due: the cron re-queued it every hour,
@@ -236,7 +238,10 @@ export async function sendOutreachStep(
   const token = generateUnsubscribeToken(contact.email);
   const emailB64 = Buffer.from(contact.email.toLowerCase()).toString("base64url");
   const unsubscribeUrl = `${appUrl}/unsubscribe?email=${emailB64}&token=${token}`;
-  const footer = `\n\n---\nDon't want to hear from us? [Unsubscribe](${unsubscribeUrl})`;
+  // Plain-text email: a markdown link rendered as raw "[Unsubscribe](https://…token…)".
+  // Opt-out is a reply ("no thanks" is classified as an unsubscribe) plus the
+  // List-Unsubscribe header below, which Gmail/Outlook show as a native link.
+  const footer = `\n\n—\nNot relevant? Reply "no thanks" and I won't email again.`;
 
   const bodyWithUtm = injectUtmIntoText(withSignOff(draft.body), {
     source:   "cold_email",

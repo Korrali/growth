@@ -28,6 +28,11 @@ describe("withSignOff", () => {
     expect(withSignOff("Worth a look?\n\n— Ashish", "Ashish Bhagat")).toBe("Worth a look?\n\n— Ashish");
     expect(withSignOff("Worth a look?\nBest, Ashish", "Ashish Bhagat")).toBe("Worth a look?\nBest, Ashish");
   });
+  it("does not sign a template that already has a signature block", () => {
+    const body = "Hi Matt,\n\nWorth a look?\n\nBest,\nAshish Bhagat\nFounder, Korrali Revenue\nrevenue.korrali.com";
+    expect(withSignOff(body, "Ashish Bhagat")).toBe(body);
+  });
+
   it("leaves team senders alone", () => {
     expect(withSignOff("Body", "The Korrali Team")).toBe("Body");
   });

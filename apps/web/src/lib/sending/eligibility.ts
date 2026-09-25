@@ -154,7 +154,10 @@ export async function checkSendEligibility(
   // Gate 10: Inside sending window (timezone-aware)
   const sendStart = outreach.campaign.sendWindowStart;
   const sendEnd = outreach.campaign.sendWindowEnd;
-  const tz = outreach.campaign.timezone ?? process.env.SEND_TIMEZONE ?? "America/New_York";
+  // The recipient's working hours when we know their zone (Apollo country),
+  // else the campaign's — a single New York window landed European prospects'
+  // emails in their evening.
+  const tz = contact.timezone ?? outreach.campaign.timezone ?? process.env.SEND_TIMEZONE ?? "America/New_York";
   if (!isInSendWindow(sendStart, sendEnd, tz)) {
     return ineligible(`outside_send_window:${sendStart}-${sendEnd}_${tz}`);
   }

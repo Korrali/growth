@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mail/transport";
 import { globalDailyCap } from "@/lib/sending/send-budget";
+import { spentThisWeekUsd, weeklyBudgetUsd } from "@/lib/ai/haiku";
 
 // The founder's morning sheet. One email, same shape every day: what went
 // out, who wrote back, what needs a human today, and anything broken. The
@@ -40,6 +41,8 @@ export interface DigestData {
   activeCampaigns: string[];
   emergencyStop: boolean;
   totals: { sent: number; replied: number; interested: number };
+  /** Haiku spend this ISO week vs the cap (email writing). */
+  aiSpend?: { usd: number; cap: number };
   /** Set when this digest run pulled the emergency stop (bounce brake). */
   autoPaused?: boolean;
 }
@@ -166,6 +169,7 @@ export async function collectDigest(now = new Date()): Promise<DigestData> {
     awaitingResearch,
     emailed,
     dailyCap: await globalDailyCap(now),
+    aiSpend: { usd: await spentThisWeekUsd(now), cap: weeklyBudgetUsd() },
     activeCampaigns: campaigns.map((c) => c.name),
     emergencyStop: settings?.globalEmergencyStop ?? true,
     totals: { sent: totalsSent, replied: totalsReplied, interested: totalsInterested },
@@ -236,6 +240,9 @@ export function renderDigest(d: DigestData, now = new Date()): { subject: string
   lines.push("PIPELINE");
   lines.push(`  Prospects waiting for their first email: ${d.queued + d.awaitingResearch} (${d.queued} ready · ${d.awaitingResearch} still being researched) · cap ${d.dailyCap}/day`);
   lines.push(`  Active campaigns: ${d.activeCampaigns.join(", ") || "none"}`);
+  if (d.aiSpend) {
+    lines.push(`  Email-writing AI (Haiku) this week: $${d.aiSpend.usd.toFixed(2)} of $${d.aiSpend.cap.toFixed(2)} cap${d.aiSpend.usd >= d.aiSpend.cap ? " — cap reached, using the free model until Monday" : ""}`);
+  }
   lines.push(`  All time: ${d.totals.sent} cold emails · ${d.totals.replied} replied · ${d.totals.interested} interested`);
   lines.push("");
 

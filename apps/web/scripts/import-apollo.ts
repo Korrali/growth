@@ -45,6 +45,7 @@ async function main() {
 
   // Imported after the env is loaded: db.ts and queue.ts read it on first use.
   const { parseApolloCsv } = await import("@/lib/import/apollo");
+  const { timezoneForCountry } = await import("@/lib/sending/timezone");
   const { PRODUCTS } = await import("@/lib/products");
   if (product !== "ROUTE" && !PRODUCTS[product as keyof typeof PRODUCTS]?.outboundViable) {
     throw new Error(`--product ${product} is not an outbound product`);
@@ -125,6 +126,7 @@ async function main() {
         lastName: lead.lastName,
         title: lead.title,
         linkedinUrl: lead.linkedinUrl,
+        timezone: timezoneForCountry(lead.country),
         emailStatus: "VALID",
         isBuyer: true,
         buyerPersona: lead.title,

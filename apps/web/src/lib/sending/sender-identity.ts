@@ -24,8 +24,11 @@ export function withSignOff(body: string, fromName = process.env.GROWTH_FROM_NAM
   const first = senderFirstName(fromName);
   if (!first) return body;
   const trimmed = body.trimEnd();
-  const lastLine = trimmed.split("\n").pop()?.trim().replace(/[,.\s—-]+$/, "") ?? "";
-  if (lastLine.toLowerCase() === first.toLowerCase() || lastLine.toLowerCase().endsWith(` ${first.toLowerCase()}`)) {
+  // Already signed: the first name (or full name, as in the template's
+  // signature block) on one of the closing lines.
+  const closing = trimmed.split("\n").slice(-6).map((l) => l.trim().replace(/[,.\s—-]+$/, "").toLowerCase());
+  const full = fromName?.trim().toLowerCase();
+  if (closing.some((l) => l === first.toLowerCase() || l.endsWith(` ${first.toLowerCase()}`) || (full && l === full))) {
     return trimmed;
   }
   return `${trimmed}\n\n${first}`;

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { enqueueEmailGenerate, enqueueOutreachSend, enqueueContactFind } from "@/lib/queue";
+import { enqueueOutreachSend, enqueueContactFind } from "@/lib/queue";
 import { CampaignStatus, EmailStatus, FitProduct } from "@prisma/client";
 
 // Automates the founder's manual motion: fit ≥6 company → find contact →
@@ -134,7 +134,9 @@ export async function runAutoEnroll(): Promise<AutoEnrollSummary> {
       update: {},
     });
 
-    await enqueueEmailGenerate({ outreachId: outreach.id });
+    // Drafts are written just before sending (sender.ts no-draft path), not
+    // at enrollment: enrollment runs far ahead of the send cap, and writing
+    // early spent the weekly Haiku budget on prospects weeks from their email.
     await enqueueOutreachSend({ outreachId: outreach.id, stepNumber: 1 });
     summary.enrolled += 1;
   }

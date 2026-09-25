@@ -38,7 +38,7 @@ Categories:
 - NOT_NOW: politely declines but leaves door open
 - WRONG_PERSON: forward me to someone else, not the right contact
 - OBJECTION: specific objection that could be addressed
-- UNSUBSCRIBE: explicitly asks to be removed
+- UNSUBSCRIBE: explicitly asks to be removed, or replies "no thanks" / "not interested, please stop" (our emails tell people to reply "no thanks" to opt out)
 - BOUNCE: automated out-of-office or bounce-like message
 - AUTO_REPLY: auto-responder with no human signal
 - NEGATIVE: strong negative, hostile, or "not interested ever"

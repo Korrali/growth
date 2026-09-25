@@ -304,6 +304,8 @@ model Contact {
   lastName       String?
   title          String?
   linkedinUrl    String?
+  // IANA zone for send-window purposes (from Apollo country); null = campaign zone.
+  timezone       String?
   emailStatus    EmailStatus       @default(UNVERIFIED)
   suppressedAt   DateTime?
   suppressReason SuppressionReason?

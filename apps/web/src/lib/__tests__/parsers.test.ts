@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { classifyActivationRisk } from "@/lib/trials/activation-classifier";
-import { checkQualityGates } from "@/lib/ai/email-generator";
 import { CampaignProduct, ActivationRisk } from "@prisma/client";
 
 // ─── Activation Risk Classifier ───────────────────────────────────────────────
@@ -126,49 +125,3 @@ describe("classifyActivationRisk — Revenue", () => {
 
 // ─── Email Quality Gates ───────────────────────────────────────────────────────
 
-describe("checkQualityGates", () => {
-  const goodStep = {
-    stepNumber: 1,
-    subject: "test",
-    body: "test",
-    relevanceScore: 8,
-    personalizationScore: 7,
-    riskScore: 2,
-  };
-
-  it("passes when all scores are good", () => {
-    const result = checkQualityGates(goodStep, 8);
-    expect(result.passed).toBe(true);
-    expect(result.blockedReasons).toHaveLength(0);
-  });
-
-  it("blocks when riskScore > 4", () => {
-    const result = checkQualityGates({ ...goodStep, riskScore: 5 }, 8);
-    expect(result.passed).toBe(false);
-    expect(result.blockedReasons.some((r) => r.includes("riskScore"))).toBe(true);
-  });
-
-  it("blocks when relevanceScore < 6", () => {
-    const result = checkQualityGates({ ...goodStep, relevanceScore: 5 }, 8);
-    expect(result.passed).toBe(false);
-    expect(result.blockedReasons.some((r) => r.includes("relevanceScore"))).toBe(true);
-  });
-
-  it("blocks when personalizationScore < 5", () => {
-    const result = checkQualityGates({ ...goodStep, personalizationScore: 4 }, 8);
-    expect(result.passed).toBe(false);
-    expect(result.blockedReasons.some((r) => r.includes("personalizationScore"))).toBe(true);
-  });
-
-  it("blocks when fitScore < 6", () => {
-    const result = checkQualityGates(goodStep, 5);
-    expect(result.passed).toBe(false);
-    expect(result.blockedReasons.some((r) => r.includes("fitScore"))).toBe(true);
-  });
-
-  it("accumulates multiple violations", () => {
-    const result = checkQualityGates({ ...goodStep, riskScore: 8, relevanceScore: 3 }, 4);
-    expect(result.passed).toBe(false);
-    expect(result.blockedReasons.length).toBeGreaterThanOrEqual(3);
-  });
-});

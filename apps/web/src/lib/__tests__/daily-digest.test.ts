@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ prisma: {} }));
 vi.mock("@/lib/mail/transport", () => ({ sendMail: vi.fn() }));
 vi.mock("@/lib/sending/send-budget", () => ({ globalDailyCap: vi.fn() }));
+vi.mock("@/lib/ai/haiku", () => ({ spentThisWeekUsd: vi.fn(), weeklyBudgetUsd: vi.fn(() => 1) }));
 
 const { digestWarnings, renderDigest, shouldBrake } = await import("@/lib/digest/daily-digest");
 type DigestData = Parameters<typeof renderDigest>[0];
@@ -109,5 +110,12 @@ describe("emailed list and fuel", () => {
   it("counts companies still being researched as fuel", () => {
     expect(digestWarnings(data({ queued: 124, awaitingResearch: 1300 }), WEDNESDAY).join(" ")).not.toMatch(/prospects left/);
     expect(digestWarnings(data({ queued: 40, awaitingResearch: 50 }), WEDNESDAY).join(" ")).toMatch(/Only 90 prospects left/);
+  });
+});
+
+describe("AI spend line", () => {
+  it("shows Haiku spend against the cap", () => {
+    expect(renderDigest(data({ aiSpend: { usd: 0.42, cap: 1 } }), WEDNESDAY).text).toContain("Email-writing AI (Haiku) this week: $0.42 of $1.00 cap");
+    expect(renderDigest(data({ aiSpend: { usd: 1.01, cap: 1 } }), WEDNESDAY).text).toContain("cap reached");
   });
 });

@@ -2,23 +2,23 @@ import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
 import { WRITING_MODEL } from "@/lib/ai/models";
 import { PRODUCTS } from "@/lib/products";
-import { reviewWithCritics } from "@/lib/ai/critics-reviewer";
-import { signOffRule } from "@/lib/sending/sender-identity";
-import type { CampaignProduct } from "@prisma/client";
+import { HAIKU_MODEL, callHaiku, haikuAvailable } from "@/lib/ai/haiku";
+import {
+  buildSequence,
+  FALLBACK_LINES,
+  type TemplateProduct,
+  type TemplateStep,
+} from "@/lib/sending/templates";
 
-export interface GeneratedStep {
-  stepNumber: number;
-  subject: string;
-  body: string;
-  relevanceScore: number;
-  personalizationScore: number;
-  riskScore: number;
-}
-
-export interface QualityGateResult {
-  passed: boolean;
-  blockedReasons: string[];
-}
+// Cold emails are a fixed, founder-approved template (lib/sending/templates.ts)
+// with two AI-written sentences per prospect: whyLine (step 1) and angleLine
+// (step 3). The AI used to write whole sequences; those came back with
+// lowercase subjects, no greeting, no "who I am", and banned filler.
+//
+// Writer: Claude Haiku while this week's spend is under the cap (haiku.ts,
+// $1/week), else the free chain. Lines are linted; a failing pair is sent
+// back once with the problems listed, then replaced by safe fallback lines —
+// a prospect is never stuck waiting on a draft.
 
 const BANNED_PHRASES: RegExp[] = [
   /\bI noticed\b/i,
@@ -46,245 +46,212 @@ export function lintDraft(text: string): string[] {
   return problems;
 }
 
-export function checkQualityGates(
-  step: GeneratedStep,
-  fitScore: number,
-): QualityGateResult {
-  const blocked: string[] = [];
-  if (step.riskScore > 4) blocked.push(`riskScore ${step.riskScore} > 4`);
-  if (step.relevanceScore < 6) blocked.push(`relevanceScore ${step.relevanceScore} < 6`);
-  if (step.personalizationScore < 5) blocked.push(`personalizationScore ${step.personalizationScore} < 5`);
-  if (fitScore < 6) blocked.push(`fitScore ${fitScore} < 6`);
-  return { passed: blocked.length === 0, blockedReasons: blocked };
+export interface GeneratedLines {
+  whyLine: string;
+  angleLine: string;
 }
 
-function systemPromptFor(product: CampaignProduct): string {
-  const profile = PRODUCTS[product];
-  return `You are the founder of ${profile.brand}. Write cold outbound emails founder-to-founder.
-
-The product you are selling: **${profile.name}** — ${profile.oneLiner}
-The buyer: ${profile.buyers}
-
-Your drafts are scored by an adversarial 5-critic panel and DISCARDED if two or more
-critics flag them. Write to clear that bar — these rules ARE what the critics check:
-
-STRUCTURE (Time-Crunched CEO + Pattern-Matcher):
-- Step 1 body: 90 words MAX. Follow-ups: 120 words max. Shorter always wins.
-- Say who you are, the specific problem, and ONE clear ask within the first 3 sentences. Never bury the ask.
-- NO problem-agitate-solution arc. NO "compliment then pitch". NO bullet lists — these read as templates.
-- End on one direct, low-friction ask (a real question). NEVER "free demo, no pressure" or any soft-close cliché.
-
-OPENING (AI-Allergic):
-- Open on a specific, verifiable observation about THIS company — never a generic setup.
-- Banned openers: "I'm guessing…", "I came across…", "I wanted to reach out", "I hope this finds you well", "founders like you", and any corporate buzzword.
-
-PROOF (Skeptic + Legal-Averse):
-- Reference only verifiable signals from the input data. Never imply research depth you cannot support.
-- NO unverifiable claims, outcome promises, or timelines ("most teams…", "within a week", "you'll save X%", "leading/best-in-class").
-- NO vague social proof, and NO compliance/certification/performance guarantees or binding-sounding commitments. Describe what the product does — not results it will deliver.
-
-PERSONALIZATION (Pattern-Matcher):
-- The company name is NOT personalization. Ground each email in a concrete, specific detail from the input.
-- Step 1 only: if landingPageAnalysis.positioningSuggestion is provided, use it as the opening hook — reference it as if you just visited their site and noticed something specific.
-
-VOICE & FORMAT:
-- Direct, specific, human, founder-to-founder. One genuine observation per email. Each step builds narratively on the last.
-- Subject lines: lowercase, punchy, 4-7 words max. No clickbait, no "quick question".
-${signOffRule()}
-
-REPLY RATE (the only metric — a reply is the goal, not a click):
-- Step 1: 60 words max, 3–4 short sentences, plain text, no exclamation marks.
-- Sentence 1 connects something true about THEM (from the input: pricing tiers, seats/usage billing, annual plans, funding, team size, enterprise customers, AI features) to why the problem is likely for them — a reason, not a compliment.
-- End every step with ONE question they can answer in a few words — yes/no, a number, or a name. Good: "Who on your team chases invoices that are still unpaid after Stripe's retries?" Bad: "How are you currently surfacing those gaps?"
-- Banned anywhere: "I noticed", "I don't see any mention", "many teams", "most teams", "just checking", "any thoughts", "circling back", "hope you're well", "I'd love to".
-- Step 4: offer to stop, and ask who the right person is if it isn't them.
-- Match the problem to how THEY bill. Renewals, plans, retired prices and coupons only apply to subscription businesses; for one-off payments (bookings, rentals, marketplaces, e-commerce) talk about failed payments, unpaid invoices and duplicate charges instead.
-- Never state numbers about them that are not in the input. teamSize is a headcount, not money.
-
-${profile.outboundOffer ? `THE OFFER (every step builds toward this one ask):
-- ${profile.outboundOffer.offer}
-- Step 1: NO links at all (links in a first cold email hurt inbox placement). Ask whether they want the link, or ask a question about how they catch these today.
-- Steps 2–4: may include this exact link once, as a bare URL on its own line: ${profile.outboundOffer.link}
-- Never invent a different link, a discount, a trial length, or a customer result.
-
-` : ""}For each step provide relevanceScore (1-10), personalizationScore (1-10), riskScore (1-10 where 1=safe, 10=risky/spammy).
-
-Respond with valid JSON only: an object with a "steps" array of 4 objects.`;
-}
-
-// Root must be an object — structured outputs mishandles top-level array
-// schemas (same bug that broke company discovery: "extracted is not iterable").
-const OUTPUT_SCHEMA = {
+const LINES_SCHEMA = {
   type: "object" as const,
   properties: {
-    steps: {
-      type: "array" as const,
-      items: {
-        type: "object" as const,
-        properties: {
-          stepNumber: { type: "number" },
-          subject: { type: "string" },
-          body: { type: "string" },
-          relevanceScore: { type: "number" },
-          personalizationScore: { type: "number" },
-          riskScore: { type: "number" },
-        },
-        required: ["stepNumber", "subject", "body", "relevanceScore", "personalizationScore", "riskScore"],
-        additionalProperties: false,
-      },
-    },
+    whyLine: { type: "string" },
+    angleLine: { type: "string" },
   },
-  required: ["steps"],
+  required: ["whyLine", "angleLine"],
   additionalProperties: false,
 };
+
+function wordCount(s: string): number {
+  return (s.trim().match(/\S+/g) ?? []).length;
+}
+
+/** Checks on the two AI sentences, on top of the banned-phrase lint. */
+export function lintLines(lines: GeneratedLines): string[] {
+  const problems: string[] = [];
+  for (const [key, text, max] of [
+    ["whyLine", lines.whyLine, 32],
+    ["angleLine", lines.angleLine, 45],
+  ] as const) {
+    if (!text?.trim()) {
+      problems.push(`${key} is empty`);
+      continue;
+    }
+    for (const p of lintDraft(text)) problems.push(`${key}: ${p}`);
+    if (wordCount(text) > max) problems.push(`${key}: ${wordCount(text)} words (max ${max})`);
+    if (/https?:\/\/|www\./i.test(text)) problems.push(`${key}: contains a link`);
+    if (/^\s*(hi|hello|hey|dear)\b/i.test(text)) problems.push(`${key}: starts with a greeting`);
+    if (/\?/.test(text)) problems.push(`${key}: is a question`);
+    if (/\b(Korrali|I'm Ashish|my name)\b/i.test(text)) problems.push(`${key}: re-introduces the product or sender`);
+  }
+  return problems;
+}
+
+const PRODUCT_GUIDE: Record<TemplateProduct, { problem: string; angles: string; facts: string }> = {
+  REVENUE: {
+    problem: "revenue slipping through their Stripe billing",
+    angles:
+      "failed renewals that stay unpaid after Stripe's automatic retries end; customers still billed on a price they retired; coupons that never expired; subscriptions that quietly stopped invoicing; duplicate charges",
+    facts:
+      "Stripe retries failed payments automatically for a limited period, then stops. Stripe cannot know which price or coupon a business intended a customer to be on.",
+  },
+  TRUST: {
+    problem: "the time enterprise security questionnaires take",
+    angles:
+      "security reviews now adding a section on AI (models used, data they see, oversight); every buyer asking the same questions in a different spreadsheet; security review holding up a deal; answers scattered across old questionnaires and documents",
+    facts: "Enterprise buyers usually send a security questionnaire before signing a new vendor.",
+  },
+};
+
+function systemPrompt(product: TemplateProduct): string {
+  const profile = PRODUCTS[product];
+  const g = PRODUCT_GUIDE[product];
+  return `You write two short sentences that get inserted into a fixed cold email from Ashish, founder of ${profile.name}.
+
+${profile.name}: ${profile.oneLiner}
+
+whyLine (goes in email 1, right after Ashish has introduced himself and the product): ONE sentence, at most 30 words, that ties a specific fact about THIS company from the input to why ${g.problem} is likely for them. It must read naturally as the next sentence. Do not greet, do not introduce the product or Ashish, do not ask a question.
+
+angleLine (opens email 3): one or two sentences, at most 40 words, about ONE specific problem that fits how this company bills or sells, different from whyLine. Choose from: ${g.angles}. Not a question.
+
+Hard rules:
+- Use only facts present in the input. Never invent numbers, customers, funding, tools, markets or certifications. teamSize is a headcount, not money.
+- The only general facts you may state: ${g.facts}
+- No compliments, no hype, no links, no exclamation marks.
+- Never use: "I noticed", "many teams", "most companies", "most businesses", "just checking", "quick follow-up", "another common leak", "I'd love to".
+- Plain, specific, human sentences in normal capitalisation.
+
+Respond with JSON only: {"whyLine": "...", "angleLine": "..."}`;
+}
+
+async function writeLines(
+  product: TemplateProduct,
+  userPrompt: string,
+): Promise<{ lines: GeneratedLines; model: string }> {
+  const system = systemPrompt(product);
+  if (await haikuAvailable()) {
+    const { text } = await callHaiku({ system, user: userPrompt, schema: LINES_SCHEMA, maxTokens: 400, purpose: "cold-email-lines" });
+    return { lines: JSON.parse(text) as GeneratedLines, model: HAIKU_MODEL };
+  }
+  const response = await anthropic.messages.create({
+    model: WRITING_MODEL,
+    max_tokens: 400,
+    system,
+    messages: [{ role: "user", content: userPrompt }],
+    output_config: { format: { type: "json_schema", schema: LINES_SCHEMA } },
+  });
+  const block = response.content.find((b) => b.type === "text");
+  if (!block || block.type !== "text") throw new Error("No text block");
+  return { lines: JSON.parse(block.text) as GeneratedLines, model: WRITING_MODEL };
+}
 
 export async function generateEmailSequence(input: {
   outreachId: string;
   contactId: string;
   campaignId: string;
-}): Promise<GeneratedStep[]> {
+}): Promise<TemplateStep[]> {
   const [outreach, contact, campaign] = await Promise.all([
     prisma.outreach.findUniqueOrThrow({
       where: { id: input.outreachId },
       include: { company: true },
     }),
     prisma.contact.findUniqueOrThrow({ where: { id: input.contactId } }),
-    prisma.campaign.findUniqueOrThrow({
-      where: { id: input.campaignId },
-      include: { sequenceSteps: { orderBy: { stepNumber: "asc" } } },
-    }),
+    prisma.campaign.findUniqueOrThrow({ where: { id: input.campaignId } }),
   ]);
 
-  const fitScore = outreach.company?.fitScore ?? 0;
+  if (campaign.product !== "REVENUE" && campaign.product !== "TRUST") {
+    throw new Error(`No cold email template for product ${campaign.product}`);
+  }
+  const product: TemplateProduct = campaign.product;
+  const companyName = outreach.company?.name ?? outreach.company?.domain ?? "your team";
+
   const inputData = {
-    contact: {
-      firstName: contact.firstName,
-      lastName: contact.lastName,
-      title: contact.title,
-      email: contact.email,
-    },
+    contact: { firstName: contact.firstName, title: contact.title },
     company: {
-      name: outreach.company?.name,
+      name: companyName,
       domain: outreach.company?.domain,
       industry: outreach.company?.industry,
-      // A bare number here came back as "$37-person team"; say what it is.
       teamSize: outreach.company?.employeeCount ? `${outreach.company.employeeCount} employees` : null,
       detectedTechs: outreach.company?.detectedTechs ?? [],
+      description: outreach.company?.description,
       painHypothesis: outreach.company?.painHypothesis,
-      trigger: outreach.company?.trigger,
       personalizedObservation: outreach.company?.personalizedObservation,
-      fitScore,
-      landingPageAnalysis: outreach.company?.landingPageAnalysis ?? null,
-    },
-    campaign: {
-      name: campaign.name,
-      product: campaign.product,
-      steps: campaign.sequenceSteps.map((s) => ({
-        stepNumber: s.stepNumber,
-        delayDays: s.delayDays,
-        ctaType: s.ctaType,
-        subjectHint: s.subjectTemplate,
-      })),
     },
   };
 
-  const startedAt = Date.now();
-  let outputData: GeneratedStep[] | null = null;
+  let lines: GeneratedLines | null = null;
+  let model = "fallback";
+  let problems: string[] = [];
   let error: string | null = null;
-  let qualityGatesJson: Record<string, unknown> | null = null;
+  const userPrompt = `Write whyLine and angleLine for this prospect:\n${JSON.stringify(inputData, null, 2)}`;
 
-  try {
-    // Rules in a prompt are requests; the lint below is enforcement. A draft
-    // that still uses banned filler or a money-formatted headcount is sent
-    // back once with the exact problems listed.
-    const userPrompt = `Generate a 4-step email sequence:\n${JSON.stringify(inputData, null, 2)}`;
-    let parsed: GeneratedStep[] = [];
-    let feedback = "";
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const response = await anthropic.messages.create({
-        model: WRITING_MODEL,
-        max_tokens: 2048,
-        system: systemPromptFor(campaign.product),
-        messages: [{ role: "user", content: userPrompt + feedback }],
-        output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
-      });
-
-      const block = response.content.find((b) => b.type === "text");
-      if (!block || block.type !== "text") throw new Error("No text block");
-
-      const rawParsed = JSON.parse(block.text) as
-        | GeneratedStep[]
-        | { steps?: GeneratedStep[] };
-      parsed = Array.isArray(rawParsed) ? rawParsed : (rawParsed.steps ?? []);
-      if (parsed.length === 0) throw new Error("Empty step array from model");
-
-      const problems = parsed.flatMap((step) =>
-        lintDraft(`${step.subject}\n${step.body}`).map((p) => `step ${step.stepNumber}: ${p}`),
-      );
-      if (problems.length === 0) break;
-      feedback = `\n\nYour previous draft broke these rules — rewrite all 4 steps without them:\n- ${problems.join("\n- ")}`;
-    }
-    outputData = parsed;
-
-    // Run quality gates (including critics review) and write drafts
-    const gatesMap: Record<number, QualityGateResult> = {};
-    for (const step of parsed) {
-      const gates = checkQualityGates(step, fitScore);
-
-      // Adversarial critics review — run on every step, cheap 8B model, best-effort
-      const critics = await reviewWithCritics({ subject: step.subject, body: step.body });
-      if (!critics.passed) {
-        critics.flags.forEach((f) => gates.blockedReasons.push(f));
-        gates.passed = false;
+  for (let attempt = 0; attempt < 2 && !lines; attempt++) {
+    try {
+      const feedback = problems.length
+        ? `\n\nYour previous lines broke these rules — rewrite both:\n- ${problems.join("\n- ")}`
+        : "";
+      const out = await writeLines(product, userPrompt + feedback);
+      problems = lintLines(out.lines);
+      if (problems.length === 0) {
+        lines = out.lines;
+        model = out.model;
       }
-
-      gatesMap[step.stepNumber] = gates;
-
-      await prisma.outreachEmailDraft.upsert({
-        where: { outreachId_stepNumber: { outreachId: input.outreachId, stepNumber: step.stepNumber } },
-        create: {
-          outreachId: input.outreachId,
-          stepNumber: step.stepNumber,
-          subject: step.subject,
-          body: step.body,
-          relevanceScore: step.relevanceScore,
-          personalizationScore: step.personalizationScore,
-          riskScore: step.riskScore,
-          qualityGates: JSON.parse(JSON.stringify(gates)),
-          criticsPassed: critics.passed,
-          criticsFlags: critics.flags,
-        },
-        update: {
-          subject: step.subject,
-          body: step.body,
-          relevanceScore: step.relevanceScore,
-          personalizationScore: step.personalizationScore,
-          riskScore: step.riskScore,
-          qualityGates: JSON.parse(JSON.stringify(gates)),
-          criticsPassed: critics.passed,
-          criticsFlags: critics.flags,
-          approvedAt: null,
-        },
-      });
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
     }
-    qualityGatesJson = gatesMap as unknown as Record<string, unknown>;
-  } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
-    throw err;
-  } finally {
-    await prisma.emailGenerationRun.create({
-      data: {
+  }
+  if (!lines) {
+    const fb = FALLBACK_LINES[product];
+    lines = { whyLine: fb.whyLine(companyName), angleLine: fb.angleLine };
+  }
+
+  const steps = buildSequence(product, {
+    firstName: contact.firstName,
+    company: companyName,
+    whyLine: lines.whyLine,
+    angleLine: lines.angleLine,
+  });
+
+  // The template is founder-approved, so every step passes the send gate
+  // (eligibility.ts gate 13 reads these).
+  const gates: Record<number, { passed: boolean; blockedReasons: string[] }> = {};
+  for (const step of steps) {
+    gates[step.stepNumber] = { passed: true, blockedReasons: [] };
+    await prisma.outreachEmailDraft.upsert({
+      where: { outreachId_stepNumber: { outreachId: input.outreachId, stepNumber: step.stepNumber } },
+      create: {
         outreachId: input.outreachId,
-        contactId: input.contactId,
-        campaignId: input.campaignId,
-        model: WRITING_MODEL,
-        inputData: JSON.parse(JSON.stringify(inputData)),
-        outputData: outputData ? JSON.parse(JSON.stringify(outputData)) : undefined,
-        qualityGates: qualityGatesJson ? JSON.parse(JSON.stringify(qualityGatesJson)) : undefined,
-        error,
+        stepNumber: step.stepNumber,
+        subject: step.subject,
+        body: step.body,
+        qualityGates: gates[step.stepNumber],
+        criticsFlags: [],
+      },
+      update: {
+        subject: step.subject,
+        body: step.body,
+        relevanceScore: null,
+        personalizationScore: null,
+        riskScore: null,
+        qualityGates: gates[step.stepNumber],
+        criticsPassed: null,
+        criticsFlags: [],
+        approvedAt: null,
       },
     });
   }
 
-  return outputData!;
+  await prisma.emailGenerationRun.create({
+    data: {
+      outreachId: input.outreachId,
+      contactId: input.contactId,
+      campaignId: input.campaignId,
+      model,
+      inputData: JSON.parse(JSON.stringify(inputData)),
+      outputData: JSON.parse(JSON.stringify({ lines, fallback: model === "fallback", lastProblems: problems })),
+      qualityGates: gates,
+      error,
+    },
+  });
+
+  return steps;
 }

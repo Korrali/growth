@@ -2,7 +2,7 @@ import dns from "node:dns/promises";
 import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
 import { HIGH_INTENT_MODEL } from "@/lib/ai/models";
-import { enqueueEmailGenerate, enqueueOutreachSend } from "@/lib/queue";
+import { enqueueOutreachSend } from "@/lib/queue";
 import { EmailStatus, type FitProduct } from "@prisma/client";
 import { PRODUCTS, type MarketedProduct } from "@/lib/products";
 import { pickDeliverableEmail } from "@/lib/import/email-verifier";
@@ -307,7 +307,9 @@ async function autoEnqueueOutreach(
     update: {},
   });
 
-  await enqueueEmailGenerate({ outreachId: outreach.id });
+  // Drafts are written just before sending (sender.ts no-draft path), not
+  // at enrollment: enrollment runs far ahead of the send cap, and writing
+  // early spent the weekly Haiku budget on prospects weeks from their email.
   await enqueueOutreachSend({ outreachId: outreach.id, stepNumber: 1 });
 
   await prisma.auditLog.create({

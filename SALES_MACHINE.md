@@ -29,8 +29,12 @@ Apollo CSV ──import──▶ scored by AI ──fit ≥ 6──▶ 4 persona
 | Link | marketplace.stripe.com/apps/korrali-revenue-recovery | trust.korrali.com |
 | Campaign | Revenue — marketplace install (weight 60) | Trust — questionnaire trial (weight 40) |
 
-Step 1 has no link. Steps 2–4 (day 3, 7, 14) carry the link once and thread as `Re:` under
-step 1. Every email is signed "Ashish".
+Emails are a fixed template (`apps/web/src/lib/sending/templates.ts`): "Hi {name}", who I am,
+the offer, one question, and a signature (Ashish Bhagat, Founder, Korrali Revenue/Trust,
+site). Only two sentences are AI-written per prospect — Claude Haiku, capped at $1/week, then
+the free model. Step 1 has no link; steps 2–4 (day 3, 7, 14) carry it and thread as `Re:`
+under step 1. Footer: reply "no thanks" to opt out. Emails go out 8:00–17:00 in the
+recipient's timezone (from the Apollo country), weekdays only.
 
 ## What runs by itself
 
@@ -63,6 +67,9 @@ pnpm tsx scripts/setup-sales-machine.ts --env $E --start
 # import a new list — ROUTE sends Stripe billers to Revenue, the rest to Trust
 pnpm tsx scripts/import-apollo.ts --env $E --file ~/growth/imports/NEW.csv --product ROUTE --dry-run
 pnpm tsx scripts/import-apollo.ts --env $E --file ~/growth/imports/NEW.csv --product ROUTE
+
+# preview the next 10 prospects' emails exactly as they'll be sent (drafts are kept)
+pnpm tsx scripts/preview-emails.ts --env $E --count 10
 
 # mailbox check (send + read); --send-test mails you one test to check the From line
 pnpm tsx scripts/check-mailbox.ts --env $E --send-test ashish.bhagat@korrali.com
