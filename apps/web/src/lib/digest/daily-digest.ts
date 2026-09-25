@@ -32,6 +32,10 @@ export interface DigestData {
   }[];
   bounces: number;
   queued: number;
+  /** Buyer contacts whose company is still waiting to be scored. */
+  awaitingResearch: number;
+  /** Everyone who got their FIRST email in the window — connect on LinkedIn. */
+  emailed: { name: string; title: string; company: string; linkedinUrl: string | null; product: string }[];
   dailyCap: number;
   activeCampaigns: string[];
   emergencyStop: boolean;
@@ -63,14 +67,36 @@ async function countFuel(): Promise<number> {
   return enrolledUnsent + notYetEnrolled;
 }
 
+/**
+ * Buyer contacts whose company hasn't been scored yet. Imports queue scoring a
+ * few companies an hour (free AI tiers), so right after an import most of the
+ * list sits here — without counting them the digest cried "list running dry"
+ * with ~1,300 leads still in the pipe.
+ */
+async function countAwaitingResearch(): Promise<number> {
+  return prisma.contact.count({
+    where: {
+      isBuyer: true,
+      suppressedAt: null,
+      outreaches: { none: {} },
+      company: { fitScoredAt: null },
+    },
+  });
+}
+
 export async function collectDigest(now = new Date()): Promise<DigestData> {
   const since = new Date(now.getTime() - DAY_MS);
 
-  const [outbound, inbound, settings, campaigns, queued, totalsSent, totalsReplied, totalsInterested] =
+  const [outbound, inbound, settings, campaigns, queued, totalsSent, totalsReplied, totalsInterested, awaitingResearch] =
     await Promise.all([
       prisma.emailMessage.findMany({
         where: { direction: "OUTBOUND", sentAt: { gte: since }, stepNumber: { not: null } },
-        select: { outreach: { select: { campaign: { select: { name: true } } } } },
+        select: {
+          stepNumber: true,
+          contact: { select: { firstName: true, lastName: true, email: true, title: true, linkedinUrl: true, company: { select: { name: true } } } },
+          outreach: { select: { campaign: { select: { name: true, product: true } } } },
+        },
+        orderBy: { sentAt: "asc" },
       }),
       prisma.emailMessage.findMany({
         where: { direction: "INBOUND", createdAt: { gte: since } },
@@ -86,7 +112,19 @@ export async function collectDigest(now = new Date()): Promise<DigestData> {
       prisma.emailMessage.count({ where: { direction: "OUTBOUND", stepNumber: { not: null } } }),
       prisma.outreach.count({ where: { status: "REPLIED" } }),
       prisma.replyClassification.count({ where: { category: "INTERESTED" } }),
+      countAwaitingResearch(),
     ]);
+
+  // First-touch sends only: follow-ups go to people already on this list.
+  const emailed = outbound
+    .filter((m) => m.stepNumber === 1)
+    .map((m) => ({
+      name: [m.contact.firstName, m.contact.lastName].filter(Boolean).join(" ") || m.contact.email,
+      title: m.contact.title ?? "",
+      company: m.contact.company?.name ?? "",
+      linkedinUrl: m.contact.linkedinUrl,
+      product: m.outreach?.campaign.product === "TRUST" ? "Trust" : "Revenue",
+    }));
 
   const byCampaign = new Map<string, number>();
   for (const m of outbound) {
@@ -125,6 +163,8 @@ export async function collectDigest(now = new Date()): Promise<DigestData> {
     needsYou,
     bounces,
     queued,
+    awaitingResearch,
+    emailed,
     dailyCap: await globalDailyCap(now),
     activeCampaigns: campaigns.map((c) => c.name),
     emergencyStop: settings?.globalEmergencyStop ?? true,
@@ -150,8 +190,9 @@ export function digestWarnings(d: DigestData, now = new Date()): string[] {
   if (d.sent > 0 && d.bounces / d.sent > BOUNCE_ALARM_RATE) {
     warnings.push(`Bounce rate ${(100 * d.bounces / d.sent).toFixed(1)}% (> 3%). Pause and clean the list before sending more — this damages the domain.`);
   }
-  if (d.dailyCap > 0 && d.queued / d.dailyCap < LOW_FUEL_DAYS) {
-    warnings.push(`Only ${d.queued} prospects left to start (~${Math.floor(d.queued / d.dailyCap)} days at ${d.dailyCap}/day). Pull the next Apollo batch and import it.`);
+  const fuel = d.queued + d.awaitingResearch;
+  if (d.dailyCap > 0 && fuel / d.dailyCap < LOW_FUEL_DAYS) {
+    warnings.push(`Only ${fuel} prospects left to start (~${Math.floor(fuel / d.dailyCap)} days at ${d.dailyCap}/day). Pull the next Apollo batch and import it.`);
   }
   return warnings;
 }
@@ -178,6 +219,14 @@ export function renderDigest(d: DigestData, now = new Date()): { subject: string
   }
   lines.push("");
 
+  lines.push(`EMAILED FOR THE FIRST TIME — connect on LinkedIn (${d.emailed.length})`);
+  if (d.emailed.length === 0) lines.push("  Nobody new in the last 24 hours.");
+  for (const e of d.emailed) {
+    lines.push(`  [${e.product}] ${e.name}${e.title ? `, ${e.title}` : ""}${e.company ? ` — ${e.company}` : ""}`);
+    lines.push(`      ${e.linkedinUrl ?? "(no LinkedIn URL)"}`);
+  }
+  lines.push("");
+
   lines.push("LAST 24 HOURS");
   lines.push(`  Sent: ${d.sent}${d.sentByCampaign.length ? ` (${d.sentByCampaign.map((c) => `${c.name}: ${c.count}`).join(", ")})` : ""}`);
   lines.push(`  Replies: ${d.replies.length ? d.replies.map((r) => `${r.category} ${r.count}`).join(", ") : "none"}`);
@@ -185,7 +234,7 @@ export function renderDigest(d: DigestData, now = new Date()): { subject: string
   lines.push("");
 
   lines.push("PIPELINE");
-  lines.push(`  Prospects waiting for their first email: ${d.queued} (cap ${d.dailyCap}/day)`);
+  lines.push(`  Prospects waiting for their first email: ${d.queued + d.awaitingResearch} (${d.queued} ready · ${d.awaitingResearch} still being researched) · cap ${d.dailyCap}/day`);
   lines.push(`  Active campaigns: ${d.activeCampaigns.join(", ") || "none"}`);
   lines.push(`  All time: ${d.totals.sent} cold emails · ${d.totals.replied} replied · ${d.totals.interested} interested`);
   lines.push("");
@@ -194,6 +243,7 @@ export function renderDigest(d: DigestData, now = new Date()): { subject: string
   lines.push("  - INTERESTED replies already get the AI answer with the link after 2h. Reply yourself first if you want.");
   lines.push("  - Objections / not now / wrong person: answer if you like.");
   lines.push("  - Anyone who installed or started a trial: offer a 15-minute walkthrough.");
+  lines.push("  - LinkedIn: connect with everyone under EMAILED above (drafts are in Growth → LinkedIn).");
   lines.push("");
   return { subject, text: lines.join("\n") };
 }

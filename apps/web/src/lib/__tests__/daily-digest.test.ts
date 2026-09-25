@@ -18,6 +18,8 @@ function data(overrides: Partial<DigestData> = {}): DigestData {
     needsYou: [],
     bounces: 0,
     queued: 300,
+    awaitingResearch: 0,
+    emailed: [],
     dailyCap: 30,
     activeCampaigns: ["Revenue — marketplace install"],
     emergencyStop: false,
@@ -90,5 +92,22 @@ describe("bounce brake", () => {
     expect(subject.startsWith("⚠ ")).toBe(true);
     expect(text).toContain("AUTO-PAUSED: bounce rate 10.0%");
     expect(text).not.toContain("Emergency stop is ON — nothing is sending");
+  });
+});
+
+describe("emailed list and fuel", () => {
+  it("lists first-touch prospects with LinkedIn links", () => {
+    const { text } = renderDigest(
+      data({ emailed: [{ name: "Matt Smith", title: "CEO", company: "Fairing", linkedinUrl: "http://linkedin.com/in/matt", product: "Revenue" }] }),
+      WEDNESDAY,
+    );
+    expect(text).toContain("EMAILED FOR THE FIRST TIME — connect on LinkedIn (1)");
+    expect(text).toContain("[Revenue] Matt Smith, CEO — Fairing");
+    expect(text).toContain("http://linkedin.com/in/matt");
+  });
+
+  it("counts companies still being researched as fuel", () => {
+    expect(digestWarnings(data({ queued: 124, awaitingResearch: 1300 }), WEDNESDAY).join(" ")).not.toMatch(/prospects left/);
+    expect(digestWarnings(data({ queued: 40, awaitingResearch: 50 }), WEDNESDAY).join(" ")).toMatch(/Only 90 prospects left/);
   });
 });

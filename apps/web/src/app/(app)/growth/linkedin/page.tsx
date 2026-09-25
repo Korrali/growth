@@ -16,9 +16,16 @@ export default async function LinkedInPage() {
   const [pending, sent, replied, totalWithUrl, totalNoDraft] = await Promise.all([
     prisma.linkedInOutreach.findMany({
       where: { status: "PENDING" },
-      include: { contact: { include: { company: true } } },
+      include: {
+        contact: {
+          include: {
+            company: true,
+            _count: { select: { emailMessages: { where: { direction: "OUTBOUND" } } } },
+          },
+        },
+      },
       orderBy: { createdAt: "asc" },
-      take: 50,
+      take: 500,
     }),
     prisma.linkedInOutreach.findMany({
       where: { status: "SENT" },
@@ -33,13 +40,20 @@ export default async function LinkedInPage() {
     }),
   ]);
 
+  // People who already got a cold email come first: a connection request
+  // right after the email is what lifts replies. Then oldest draft first.
+  const queue = [...pending]
+    .sort((a, b) => Number(b.contact._count.emailMessages > 0) - Number(a.contact._count.emailMessages > 0))
+    .slice(0, 50);
+  const emailedWaiting = pending.filter((p) => p.contact._count.emailMessages > 0).length;
+
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">LinkedIn Queue</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {pending.length} ready to send · {sent.length} sent · {replied} replied · {totalWithUrl} contacts with URL
+            {pending.length} ready to send ({emailedWaiting} already emailed — shown first) · {sent.length} sent · {replied} replied · {totalWithUrl} contacts with URL
           </p>
         </div>
         {totalNoDraft > 0 && (
@@ -55,9 +69,9 @@ export default async function LinkedInPage() {
       </div>
 
       {/* Pending — ready to copy-paste and send */}
-      {pending.length > 0 && (
+      {queue.length > 0 && (
         <section className="space-y-4">
-          {pending.map((outreach) => {
+          {queue.map((outreach) => {
             const contact = outreach.contact;
             const company = contact.company;
             return (
@@ -77,6 +91,9 @@ export default async function LinkedInPage() {
                         )}
                         {company?.fitProduct && (
                           <Badge variant="default">{company.fitProduct}</Badge>
+                        )}
+                        {outreach.contact._count.emailMessages > 0 && (
+                          <Badge variant="outline">Emailed</Badge>
                         )}
                         {company?.fitScore != null && (
                           <span className="text-xs text-muted-foreground">fit {company.fitScore}/10</span>
