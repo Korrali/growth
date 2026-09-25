@@ -128,7 +128,7 @@ async function main() {
   console.log(
     stop
       ? "emergency stop: ON — emails are written, nothing sends. Re-run with --start to go live."
-      : "emergency stop: off — LIVE. Sends start in the next weekday window (8:00–17:00 New York).",
+      : "emergency stop: off — LIVE. Sends go out 8:00–17:00 on weekdays in each recipient's timezone.",
   );
   await prisma.$disconnect();
 }
