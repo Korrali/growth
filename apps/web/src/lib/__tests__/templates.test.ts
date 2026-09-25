@@ -40,6 +40,7 @@ describe("buildSequence", () => {
     expect(s2!.body).toContain("https://trust.korrali.com");
     expect(s1!.body).toContain("helps you prepare for SOC 2 and ISO 27001");
     expect(s2!.body).toContain("policy pack and a public trust page");
+    expect(s2!.body).toContain("re-checks them every hour");
   });
 
   it("falls back to a neutral greeting without a first name", () => {

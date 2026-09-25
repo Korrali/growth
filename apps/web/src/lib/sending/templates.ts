@@ -155,7 +155,9 @@ The next time a customer sends ${co} a security questionnaire, you can run it th
 
 ${p.link}
 
-From the same documents it also builds your policy pack and a public trust page, so buyers can check your security posture before they send a questionnaire at all. You review and approve everything before it goes out. Would that save your team time?
+From the same documents it also builds your policy pack and a public trust page, so buyers can check your security posture before they send a questionnaire at all. It connects read-only to the tools you already use (AWS, Google Cloud, Azure, GitHub, GitLab, Google Workspace, Okta and Rippling) and re-checks them every hour, so your SOC 2 and ISO 27001 evidence stays current.
+
+You review and approve everything before it goes out. Would that save your team time?
 
 ${sig}`,
     },
