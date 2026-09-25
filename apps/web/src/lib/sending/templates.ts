@@ -47,7 +47,7 @@ const PRODUCT = {
 
 function signature(product: TemplateProduct): string {
   const p = PRODUCT[product];
-  return `Best,\nAshish Bhagat\nFounder, ${p.name}\n${p.site}`;
+  return `Best,\nAshish Bhagat\nFounder, ${p.name}\nKorrali LLC, a US company\n${p.site}`;
 }
 
 function greeting(firstName: string | null): string {
@@ -112,7 +112,7 @@ Korrali Revenue flags these automatically, and detection is free with no card:
 
 ${p.link}
 
-Who on your team looks after billing in Stripe?
+If you'd rather not dig through it yourself, install it and reply here: I'll email you a one-page report of what's leaking at ${co}, with the fix for each, within two days.
 
 ${sig}`,
       },
@@ -172,7 +172,7 @@ Korrali Trust drafts those answers from the documents you already have, with the
 
 ${p.link}
 
-Is there a security review on your desk right now?
+Or, if one is on your desk right now, just reply with it attached and I'll send it back completed within two days.
 
 ${sig}`,
     },
