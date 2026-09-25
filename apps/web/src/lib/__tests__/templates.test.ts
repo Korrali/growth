@@ -20,6 +20,15 @@ describe("buildSequence", () => {
     expect(s1!.body.endsWith("Best,\nAshish Bhagat\nFounder, Korrali Revenue\nrevenue.korrali.com")).toBe(true);
     for (const s of [s2!, s3!, s4!]) expect(s.body).toContain("https://marketplace.stripe.com/apps/korrali-revenue-recovery");
     expect(s3!.body).toContain(ctx.angleLine);
+    expect(s1!.body).toContain("listed on the Stripe App Marketplace, where Stripe reviewed and approved it");
+    expect(s2!.body).toContain("your Stripe access token is encrypted at rest");
+  });
+
+  it("never claims certification or compliance on anyone's behalf", () => {
+    for (const product of ["REVENUE", "TRUST"] as const) {
+      const text = buildSequence(product, ctx).map((s) => s.body).join("\n");
+      expect(text).not.toMatch(/become (SOC ?2|ISO|compliant)|makes? you compliant|certified by|endorsed by/i);
+    }
   });
 
   it("gives Trust its own offer and link", () => {
@@ -29,6 +38,8 @@ describe("buildSequence", () => {
     expect(s1!.body).toContain("Your first questionnaire is free");
     expect(s1!.body).toContain("trust.korrali.com");
     expect(s2!.body).toContain("https://trust.korrali.com");
+    expect(s1!.body).toContain("helps you prepare for SOC 2 and ISO 27001");
+    expect(s2!.body).toContain("policy pack and a public trust page");
   });
 
   it("falls back to a neutral greeting without a first name", () => {

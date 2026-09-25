@@ -5,6 +5,11 @@
 // sequences produced lowercase subjects, no greeting, no "who I am", and
 // filler the prompt had banned.
 //
+// Claims here must stay provable: Revenue was reviewed and approved by
+// Stripe for the App Marketplace (not "certified" or "endorsed"); Trust helps
+// companies PREPARE for SOC 2 / ISO 27001 (only an auditor makes anyone
+// compliant — see the positioning doctrine).
+//
 // Follow-ups (steps 2-4) are sent as replies in the step-1 thread
 // ("Re: <step 1 subject>", see sender.ts), so their subjects are not shown.
 
@@ -71,7 +76,7 @@ export function buildSequence(product: TemplateProduct, ctx: TemplateContext): T
         subject: `Stripe billing leaks at ${co}`,
         body: `${hi}
 
-I'm Ashish, founder of Korrali Revenue. It's a Stripe app that finds revenue Stripe itself can't flag: customers still on prices you've retired, coupons that never expired, and subscriptions that quietly stopped invoicing.
+I'm Ashish, founder of Korrali Revenue. It's a Stripe app that finds revenue Stripe itself can't flag: customers still on prices you've retired, coupons that never expired, and subscriptions that quietly stopped invoicing. It's listed on the Stripe App Marketplace, where Stripe reviewed and approved it.
 
 ${why}
 
@@ -87,6 +92,8 @@ ${sig}`,
 In case it's easier to just look, here's the free install from the Stripe App Marketplace:
 
 ${p.link}
+
+On security: it connects through Stripe's own app permissions, your Stripe access token is encrypted at rest, and we never see card numbers because Stripe never shares them. Recovery only runs when you turn it on, and you can disconnect at any time.
 
 Every finding shows the customer and the amount, so you can check it in your own Stripe dashboard. Would that be useful for ${co}?
 
@@ -129,7 +136,7 @@ ${sig}`,
       subject: `Security questionnaires at ${co}`,
       body: `${hi}
 
-I'm Ashish, founder of Korrali Trust. It drafts answers to enterprise security questionnaires from your existing security documents: every answer cites its source, gaps are flagged instead of guessed, and it exports back into the buyer's original spreadsheet.
+I'm Ashish, founder of Korrali Trust. It drafts answers to enterprise security questionnaires from your existing security documents: every answer cites its source, gaps are flagged instead of guessed, and it exports back into the buyer's original spreadsheet. It also helps you prepare for SOC 2 and ISO 27001, with a control dashboard mapped to both, a generated policy pack, and a public trust page.
 
 ${why}
 
@@ -146,7 +153,7 @@ The next time a customer sends ${co} a security questionnaire, you can run it th
 
 ${p.link}
 
-You review and approve every answer before it goes back. Would that save your team time?
+From the same documents it also builds your policy pack and a public trust page, so buyers can check your security posture before they send a questionnaire at all. You review and approve everything before it goes out. Would that save your team time?
 
 ${sig}`,
     },
