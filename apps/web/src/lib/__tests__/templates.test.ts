@@ -65,6 +65,17 @@ describe("lintLines", () => {
   });
 });
 
+describe("lintLines — numbers and tech names", () => {
+  it("rejects any figure", () => {
+    expect(lintLines({ whyLine: "With $11M in annual revenue running through Stripe, leaks add up", angleLine: ctx.angleLine }).join()).toMatch(/contains a number/);
+  });
+  it("rejects naming tools from the tech list, except the allowed one", () => {
+    const opts = { techNames: ["Stripe", "Anthropic Claude", "Claude", "OpenAI", "AWS"], allowedTech: ["Stripe"] };
+    expect(lintLines({ whyLine: "Upwave bills through Stripe on annual plans", angleLine: "Buyers ask about AI models like Claude in your platform" }, opts).join()).toMatch(/names "Claude"/);
+    expect(lintLines({ whyLine: "Upwave bills through Stripe on annual plans", angleLine: ctx.angleLine }, opts)).toEqual([]);
+  });
+});
+
 describe("timezoneForCountry", () => {
   it("maps Apollo countries and ignores unknowns", () => {
     expect(timezoneForCountry("United States")).toBe("America/Chicago");
