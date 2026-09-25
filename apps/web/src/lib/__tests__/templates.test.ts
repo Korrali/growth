@@ -88,6 +88,24 @@ describe("lintLines — numbers and tech names", () => {
   });
 });
 
+describe("lintLines — Stripe retry timing", () => {
+  it("rejects stated retry windows, in words", () => {
+    for (const angleLine of [
+      "Stripe stops retrying failed payments after a few days, so those renewals stay unpaid.",
+      "Failed renewals go quiet once Stripe's retries end within a week.",
+      "Declined cards sit unpaid for weeks after the last retry.",
+    ]) {
+      expect(lintLines({ whyLine: ctx.whyLine, angleLine }).join()).toMatch(/states retry timing/);
+    }
+  });
+  it("allows timing outside retry context, and retries without timing", () => {
+    expect(lintLines({ whyLine: ctx.whyLine, angleLine: ctx.angleLine })).toEqual([]);
+    expect(
+      lintLines({ whyLine: ctx.whyLine, angleLine: "Failed renewals can stay unpaid once Stripe's automatic retries end." }),
+    ).toEqual([]);
+  });
+});
+
 describe("timezoneForCountry", () => {
   it("maps Apollo countries and ignores unknowns", () => {
     expect(timezoneForCountry("United States")).toBe("America/Chicago");

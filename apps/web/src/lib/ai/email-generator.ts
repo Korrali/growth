@@ -61,6 +61,10 @@ const LINES_SCHEMA = {
   additionalProperties: false,
 };
 
+const RETRY_CONTEXT = /\b(retr(y|ies|ied|ying)|dunning|failed (payments?|charges?|renewals?)|declin(e|es|ed))\b/i;
+const TIME_SPAN =
+  /\b(?:(?:a|an|one|two|three|four|five|six|seven|ten|a few|few|several|a couple of|a couple|couple of|some|many|a number of)\s+)?(?:hours?|days?|weeks?|months?)\b/i;
+
 function wordCount(s: string): number {
   return (s.trim().match(/\S+/g) ?? []).length;
 }
@@ -97,6 +101,11 @@ export function lintLines(
     // No figures at all: a live draft quoted Apollo's revenue estimate back
     // at the prospect ("$11M in annual revenue").
     if (/\d/.test(text)) problems.push(`${key}: contains a number`);
+    // Stripe's retry window is configurable per account, so any stated
+    // timing ("after a few days", "within a week") is a guess about them.
+    if (RETRY_CONTEXT.test(text) && TIME_SPAN.test(text)) {
+      problems.push(`${key}: states retry timing "${text.match(TIME_SPAN)![0]}"`);
+    }
     for (const t of techWords) {
       const re = new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
       if (re.test(text)) problems.push(`${key}: names "${t}" from their tech list`);
@@ -138,6 +147,7 @@ Hard rules:
 - Never name a technology, vendor or AI model they use (detectedTechs is unreliable)${""} — describe what the company does instead.
 - Write complete, grammatical sentences.
 - The only general facts you may state: ${g.facts}
+- Never say how long Stripe retries or when it stops (no "after a few days", "within a week", "for weeks"): each business configures its own retry window.
 - No compliments, no hype, no links, no exclamation marks.
 - Never use: "I noticed", "many teams", "most companies", "most businesses", "just checking", "quick follow-up", "another common leak", "I'd love to".
 - Plain, specific, human sentences in normal capitalisation.
