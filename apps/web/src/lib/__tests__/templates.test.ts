@@ -20,7 +20,7 @@ describe("buildSequence", () => {
     expect(s1!.body.endsWith("Best,\nAshish Bhagat\nFounder, Korrali Revenue\nrevenue.korrali.com")).toBe(true);
     for (const s of [s2!, s3!, s4!]) expect(s.body).toContain("https://marketplace.stripe.com/apps/korrali-revenue-recovery");
     expect(s3!.body).toContain(ctx.angleLine);
-    expect(s1!.body).toContain("listed on the Stripe App Marketplace, where Stripe reviewed and approved it");
+    expect(s1!.body).toContain("Stripe's app review team tested it over several review rounds before approving it");
     expect(s2!.body).toContain("your Stripe access token is encrypted at rest");
   });
 

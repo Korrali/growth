@@ -5,8 +5,10 @@
 // sequences produced lowercase subjects, no greeting, no "who I am", and
 // filler the prompt had banned.
 //
-// Claims here must stay provable: Revenue was reviewed and approved by
-// Stripe for the App Marketplace (not "certified" or "endorsed"); Trust helps
+// Claims here must stay provable: Revenue was tested by Stripe's app review
+// team (a Stripe QA engineer, versions 0.1.0–0.1.2) and approved for the App
+// Marketplace — never "certified" or "endorsed" by Stripe, which Marketplace
+// rules don't allow apps to imply; Trust helps
 // companies PREPARE for SOC 2 / ISO 27001 (only an auditor makes anyone
 // compliant — see the positioning doctrine).
 //
@@ -76,7 +78,7 @@ export function buildSequence(product: TemplateProduct, ctx: TemplateContext): T
         subject: `Stripe billing leaks at ${co}`,
         body: `${hi}
 
-I'm Ashish, founder of Korrali Revenue. It's a Stripe app that finds revenue Stripe itself can't flag: customers still on prices you've retired, coupons that never expired, and subscriptions that quietly stopped invoicing. It's listed on the Stripe App Marketplace, where Stripe reviewed and approved it.
+I'm Ashish, founder of Korrali Revenue. It's a Stripe app that finds revenue Stripe itself can't flag: customers still on prices you've retired, coupons that never expired, and subscriptions that quietly stopped invoicing. It's listed on the Stripe App Marketplace, and Stripe's app review team tested it over several review rounds before approving it.
 
 ${why}
 
