@@ -9,6 +9,7 @@ import { verifyEmail } from "@/lib/import/email-verifier";
 import { enqueueEmailGenerate } from "@/lib/queue";
 import { sendMail } from "@/lib/mail/transport";
 import { withSignOff } from "@/lib/sending/sender-identity";
+import { isStaleDraft } from "@/lib/sending/templates";
 
 // How many times a step may abort for a missing draft before the sequence is
 // stopped for good. Each attempt is an hour apart, so this is a ~3 hour window
@@ -129,7 +130,14 @@ export async function sendOutreachStep(
     where: { outreachId_stepNumber: { outreachId, stepNumber } },
   });
 
-  if (!draft) {
+  // Only Revenue/Trust drafts come from the template; client campaigns don't.
+  const stale =
+    !!draft &&
+    (outreach.campaign.product === "REVENUE" || outreach.campaign.product === "TRUST") &&
+    isStaleDraft(draft.updatedAt);
+  if (!draft || stale) {
+    // A stale draft (written before the current template) is treated like a
+    // missing one: regenerated, then sent on the retry.
     // No draft yet. This is the normal path for a first email: drafts are
     // written just before sending, not at enrollment (auto-enroll.ts), so the
     // weekly Haiku budget only pays for emails that actually go out.
@@ -154,7 +162,7 @@ export async function sendOutreachStep(
         action: "outreach.aborted",
         entity: "Outreach",
         entityId: outreachId,
-        metadata: { stepNumber, reason: "no-draft", priorAborts },
+        metadata: { stepNumber, reason: stale ? "stale-draft" : "no-draft", priorAborts },
       },
     });
 

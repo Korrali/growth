@@ -17,6 +17,17 @@
 
 export type TemplateProduct = "REVENUE" | "TRUST";
 
+// When the template text last changed. BUMP THIS WITH EVERY TEMPLATE EDIT.
+// Drafts are stored per prospect, so a draft written before a change keeps
+// the old text; on 2026-09-25 18 prospects got the pre-template format from
+// drafts written the night before. The sender rewrites any draft older than
+// this before sending it (sender.ts).
+export const TEMPLATE_REVISED_AT = new Date("2026-09-25T07:12:00Z");
+
+export function isStaleDraft(draftUpdatedAt: Date): boolean {
+  return draftUpdatedAt < TEMPLATE_REVISED_AT;
+}
+
 export interface TemplateContext {
   firstName: string | null;
   company: string;

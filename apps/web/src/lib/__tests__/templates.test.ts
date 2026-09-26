@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSequence, tidySentence, FALLBACK_LINES } from "@/lib/sending/templates";
+import { buildSequence, tidySentence, FALLBACK_LINES, isStaleDraft, TEMPLATE_REVISED_AT } from "@/lib/sending/templates";
 import { lintLines } from "@/lib/ai/email-generator";
 import { timezoneForCountry } from "@/lib/sending/timezone";
 
@@ -103,6 +103,13 @@ describe("lintLines — Stripe retry timing", () => {
     expect(
       lintLines({ whyLine: ctx.whyLine, angleLine: "Failed renewals can stay unpaid once Stripe's automatic retries end." }),
     ).toEqual([]);
+  });
+});
+
+describe("isStaleDraft", () => {
+  it("flags drafts written before the current template", () => {
+    expect(isStaleDraft(new Date("2026-09-24T18:29:00Z"))).toBe(true);
+    expect(isStaleDraft(new Date(TEMPLATE_REVISED_AT.getTime() + 1000))).toBe(false);
   });
 });
 
