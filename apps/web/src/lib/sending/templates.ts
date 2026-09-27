@@ -18,21 +18,29 @@
 
 export type TemplateProduct = "REVENUE" | "TRUST";
 
-// When the template text last changed. BUMP THIS WITH EVERY TEMPLATE EDIT.
+// When each product's template text last changed. BUMP THE PRODUCT'S DATE
+// WITH EVERY EDIT TO ITS TEMPLATE, and never to a time in the future: a draft
+// written after the deploy but before the date counts as stale, and every
+// stale draft costs a send attempt (sender.ts stops an outreach after three).
 // Drafts are stored per prospect, so a draft written before a change keeps
 // the old text; on 2026-09-25 18 prospects got the pre-template format from
 // drafts written the night before. The sender rewrites any draft older than
-// this before sending it (sender.ts).
-export const TEMPLATE_REVISED_AT = new Date("2026-09-27T19:00:00Z");
+// its product's date before sending it (sender.ts).
+export const TEMPLATE_REVISED_AT: Record<TemplateProduct, Date> = {
+  REVENUE: new Date("2026-09-25T07:12:00Z"),
+  // Trust relaunch copy deployed ~18:25Z; every older Trust draft was deleted
+  // and the new ones were written from 18:29:15Z.
+  TRUST: new Date("2026-09-27T18:29:00Z"),
+};
 
 // Trust was relaunched as an AI-native compliance platform. Anyone sent a
 // Trust email before this got the old questionnaire-tool pitch (with a free
 // first questionnaire that no longer exists), so their email 1 re-introduces
 // the product instead of introducing it (email-generator.ts).
-export const TRUST_RELAUNCH_AT = new Date("2026-09-27T19:00:00Z");
+export const TRUST_RELAUNCH_AT = TEMPLATE_REVISED_AT.TRUST;
 
-export function isStaleDraft(draftUpdatedAt: Date): boolean {
-  return draftUpdatedAt < TEMPLATE_REVISED_AT;
+export function isStaleDraft(product: TemplateProduct, draftUpdatedAt: Date): boolean {
+  return draftUpdatedAt < TEMPLATE_REVISED_AT[product];
 }
 
 export interface TemplateContext {

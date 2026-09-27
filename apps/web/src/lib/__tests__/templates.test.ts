@@ -128,9 +128,20 @@ describe("lintLines — Stripe retry timing", () => {
 });
 
 describe("isStaleDraft", () => {
-  it("flags drafts written before the current template", () => {
-    expect(isStaleDraft(new Date("2026-09-24T18:29:00Z"))).toBe(true);
-    expect(isStaleDraft(new Date(TEMPLATE_REVISED_AT.getTime() + 1000))).toBe(false);
+  it("flags drafts written before their product's current template", () => {
+    expect(isStaleDraft("REVENUE", new Date("2026-09-24T18:29:00Z"))).toBe(true);
+    expect(isStaleDraft("REVENUE", new Date(TEMPLATE_REVISED_AT.REVENUE.getTime() + 1000))).toBe(false);
+    expect(isStaleDraft("TRUST", new Date("2026-09-25T09:00:00Z"))).toBe(true);
+    // The relaunch drafts, written right after the Trust deploy, are current.
+    expect(isStaleDraft("TRUST", new Date("2026-09-27T18:29:15Z"))).toBe(false);
+  });
+
+  it("a Trust change leaves Revenue drafts alone", () => {
+    expect(isStaleDraft("REVENUE", new Date("2026-09-26T12:00:00Z"))).toBe(false);
+  });
+
+  it("never dates a template revision in the future", () => {
+    for (const d of Object.values(TEMPLATE_REVISED_AT)) expect(d.getTime()).toBeLessThanOrEqual(Date.now());
   });
 });
 

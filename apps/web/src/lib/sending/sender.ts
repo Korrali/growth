@@ -131,10 +131,11 @@ export async function sendOutreachStep(
   });
 
   // Only Revenue/Trust drafts come from the template; client campaigns don't.
+  const product = outreach.campaign.product;
   const stale =
     !!draft &&
-    (outreach.campaign.product === "REVENUE" || outreach.campaign.product === "TRUST") &&
-    isStaleDraft(draft.updatedAt);
+    (product === "REVENUE" || product === "TRUST") &&
+    isStaleDraft(product, draft.updatedAt);
   if (!draft || stale) {
     // A stale draft (written before the current template) is treated like a
     // missing one: regenerated, then sent on the retry.
