@@ -5,62 +5,57 @@ export interface TrialEmailTemplate {
   body: string;
 }
 
+// Trust is an AI-native compliance platform (SOC 2, ISO 27001, ISO 42001) with
+// a card-required 14-day trial. The trial emails walk the real first-week path:
+// connect a system, fix what fails, adopt policies, then questionnaires.
 const TRUST_SEQUENCE: TrialEmailTemplate[] = [
   {
-    subject: "Quick start: your first knowledge base fact",
+    subject: "Quick start: connect your first system",
     body: `Hi there,
 
-Welcome to Korrali Trust. The fastest way to get value is to add your first knowledge base fact — it takes about 2 minutes.
+Welcome to Korrali Trust. The fastest way to see where you stand is to connect one system — AWS, Google Cloud, Azure, GitHub or Google Workspace are the usual first picks. It's read-only and takes a few minutes.
 
-Head to your Knowledge Base and paste in one fact about your infrastructure or data handling. That's it.
-
-Once you have a few facts in, you can paste any questionnaire and watch the answers generate.
+Go to Integrations, pick one, and follow the steps on the page. The first checks run as soon as it's connected.
 
 The Korrali Team`,
   },
   {
-    subject: "You've added facts — try a questionnaire",
+    subject: "What failed, and how to fix it",
     body: `Hi there,
 
-You've got knowledge base facts in — great start.
+Every check that failed is now a task with the console steps to fix it. Fix it once and the task closes itself on the next hourly sync; if the setting regresses, it reopens.
 
-The next step is to paste a questionnaire. Even a single question works. Go to Questionnaires, paste a question, and see how the answer is generated from your facts.
-
-If you have a security questionnaire sitting in your inbox right now, that's the perfect test case.
+On each control, the AI evidence review reads the evidence the way an auditor would and lists what's missing. Your team accepts or dismisses each review, so nothing changes without you.
 
 The Korrali Team`,
   },
   {
-    subject: "Your trust page is one step away",
+    subject: "Your policies, in an afternoon",
     body: `Hi there,
 
-A trust page gives enterprise buyers a public-facing signal that you take security seriously. It takes about 5 minutes to set up from your existing knowledge base.
+Auditors ask for policies first. Trust has 16 policy templates: adopt the ones you need, edit them, approve and publish, and send them to your people to accept.
 
-Head to Trust Page and publish. You can share the link directly from your next enterprise call.
+If you build with AI, add your AI systems to the AI inventory too. It covers ISO 42001 and the AI section of security reviews.
 
 The Korrali Team`,
   },
   {
-    subject: "Getting the most out of Korrali Trust",
+    subject: "Your next security questionnaire",
     body: `Hi there,
 
-A few things Korrali Trust customers find most useful:
+When a buyer sends a security questionnaire, upload it to Questionnaires. Answers are drafted from your approved facts and what the connectors observed, each with its source; anything it can't support is flagged instead of guessed. You review and approve, then export into the buyer's own spreadsheet.
 
-- The policy pack generates 6 governance documents from your KB (useful when a buyer asks "do you have an AI policy?")
-- Approved answers get stored in your answer library so you don't retype them next time
-- The trust page URL is something you can put in your sales deck
-
-Let me know if you hit any friction.
+The same facts power a public trust page you can share before a questionnaire is sent at all.
 
 The Korrali Team`,
   },
   {
-    subject: "Checking in on your questionnaire workflow",
+    subject: "Checking in on your setup",
     body: `Hi there,
 
-Quick check-in — have you had a chance to run a real questionnaire through Korrali yet?
+Quick check-in: how far did you get with connecting systems and fixing the first tasks?
 
-If there's anything blocking you (questionnaire format, specific question types, integration needs), I'd like to know. Happy to jump on a quick call.
+If something is blocking you (a connector, a control you're unsure about, an audit date coming up), reply and tell me. Happy to jump on a quick call.
 
 The Korrali Team`,
   },
@@ -253,14 +248,12 @@ export function getTrialSequence(product: CampaignProduct): TrialEmailTemplate[]
 
 const TRUST_WINBACK: TrialEmailTemplate[] = [
   {
-    subject: "Your Korrali trial ended — want another week?",
+    subject: "Your Korrali Trust workspace is still here",
     body: `Hi there,
 
-Your 14-day Korrali Trust trial just ended. If you were mid-way through a questionnaire or didn't get a real one through the system yet, that's a bad place to stop evaluating.
+Your Korrali Trust subscription ended. Your workspace is saved — connected systems, evidence history, policies and answers — so if you come back, you pick up where you left off.
 
-Reply to this email and I'll extend your trial a week — no card needed.
-
-If you're ready instead, the annual plans now include 2 months free.
+If you stopped because something didn't work or didn't fit, reply and tell me. One line is plenty.
 
 The Korrali Team`,
   },
@@ -268,9 +261,9 @@ The Korrali Team`,
     subject: "Closing the loop on Korrali",
     body: `Hi there,
 
-I'll stop emailing after this one. Before I do: if Korrali Trust didn't fit, I'd genuinely like to know what was missing — questionnaire format, pricing, something else. One line is plenty.
+I'll stop emailing after this one. Before I do: if Korrali Trust didn't fit, I'd genuinely like to know what was missing — a connector, a framework, pricing, something else.
 
-And if the timing was just wrong, your knowledge base is still saved. Reply whenever an enterprise questionnaire lands in your inbox and I'll reactivate you the same day.
+And if the timing was just wrong, your workspace is still saved. Reply whenever an audit or a security review comes up.
 
 The Korrali Team`,
   },
