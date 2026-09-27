@@ -53,11 +53,12 @@ export const PRODUCTS: Record<MarketedProduct, ProductProfile> = {
     name: "Korrali Trust",
     brand: "Korrali",
     url: "https://trust.korrali.com",
-    // Claims stay workflow-level (see positioning doctrine): it drafts answers
-    // from the company's own documents for a human to approve. Never claim it
-    // certifies, makes anyone compliant, or wins deals.
+    // Claims stay workflow-level (see positioning doctrine): it helps a
+    // company prepare and keeps evidence; only an auditor issues a report.
+    // Never claim it certifies or makes anyone compliant. Nothing is free:
+    // the trial is 14 days with a card (trust/apps/web/src/lib/pricing.ts).
     oneLiner:
-      "A workspace for answering enterprise security questionnaires: upload the questionnaire spreadsheet and your existing security docs, and it drafts answers with the source cited for each, flags what it can't support instead of guessing, and exports back into the original spreadsheet for your team to review and approve. Also covers the AI section (models, training data, oversight), policy drafts, and a public trust page. The first questionnaire is free (up to 150 drafted answers, no card, no time limit); then $299/mo founding price for the first 10 customers (locked in), $599/mo after that, with unlimited questionnaires.",
+      "An AI-native compliance platform for SOC 2, ISO 27001 and ISO 42001. It connects read-only to a company's cloud, code, identity, device and HR tools, re-checks the settings auditors test every hour, and has AI review each control's evidence the way an auditor would, for the team to approve. The same live evidence and approved facts answer security questionnaires, with the source cited for every answer and gaps flagged instead of guessed, exported into the buyer's own spreadsheet. Also: policies, people, access reviews, risks, vendors, an auditor workspace, an AI inventory, a read-only MCP server for the customer's own AI agents, and a public trust page. Published annual pricing by company size: $3,000/yr up to 50 people, $5,000/yr up to 200, $9,000/yr up to 500, every feature on every plan, 14-day trial with a card.",
     icp: `STRONGEST fit (score 8–10): AI-native B2B companies — they ship AI/LLM features (AI product, agents, copilots, ML models) AND sell to enterprise or mid-market. Their security reviews now include AI-specific sections (model inventory, training data provenance, EU AI Act risk classification, AI incident response) that block deals, and EU AI Act enforcement began August 2, 2026. If a company both ships AI and sells upmarket, score it 8+.
 
 Good fit (score 6–10): Any B2B company that sells to enterprise OR mid-market (100+ employee buyers) and therefore faces vendor security reviews as a result. The real trigger is "sells to enterprise/mid-market buyers," not "is SaaS" — cloud or on-prem software, IT/managed service providers, data processors, fintechs, and any other B2B company that touches an enterprise customer's data or systems gets the same questionnaires a SaaS company does. Stronger signals: named enterprise/mid-market customers on their website, an "enterprise" pricing tier, a careers page showing they're hiring sales engineers or solutions engineers, recent funding (seed to series B), building integrations for enterprise tools (SSO, SAML, SCIM, Salesforce). Even stronger: mentions of SOC2 in progress, security page exists but is thin, no trust center yet.
@@ -83,14 +84,14 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
       '"cto"',
     ],
     outboundViable: true,
-    seoCta: "Start your free trial at trust.korrali.com",
+    seoCta: "Start a 14-day trial at trust.korrali.com",
     outboundOffer: {
       offer:
-        "Their first questionnaire is free — no card, no time limit — so they can run it on the next one a buyer actually sends: upload it with their existing security docs and get cited draft answers back in the original spreadsheet. After that, $299/mo founding price for the first 10 customers.",
+        "A 14-day trial (card required) of the full platform: connect their tools read-only and see which SOC 2 / ISO 27001 controls pass, with AI evidence review and fix steps, then run the questionnaire they have due. $3,000/yr for up to 50 people, everything included. Or, done for them: reply with a questionnaire and it comes back completed within two days.",
       link: "https://trust.korrali.com",
     },
     replyCta:
-      "Sign up at https://trust.korrali.com — their first questionnaire is free (no card, no time limit) — and run it on the questionnaire they have due now; mention the $299/mo founding price for the first 10 customers only if they ask about cost, and offer a 15-minute walkthrough of the drafted answers once it has run.",
+      "Start the 14-day trial at https://trust.korrali.com (card required, cancel in a click) and connect one system to see their SOC 2 gaps; if they have a questionnaire due, offer to complete it for them within two days. Mention pricing ($3,000/yr up to 50 people, everything included) only if they ask, and offer a 15-minute walkthrough.",
     topicSourcing: "community",
   },
 

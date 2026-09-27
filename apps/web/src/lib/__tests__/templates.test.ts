@@ -31,16 +31,33 @@ describe("buildSequence", () => {
     }
   });
 
-  it("gives Trust its own offer and link", () => {
-    const [s1, s2] = buildSequence("TRUST", ctx);
-    expect(s1!.subject).toBe("Security questionnaires at Fairing");
-    expect(s1!.body).toContain("I'm Ashish, founder of Korrali Trust.");
-    expect(s1!.body).toContain("Your first questionnaire is free");
-    expect(s1!.body).toContain("trust.korrali.com");
-    expect(s2!.body).toContain("https://trust.korrali.com");
-    expect(s1!.body).toContain("helps you prepare for SOC 2 and ISO 27001");
-    expect(s2!.body).toContain("policy pack and a public trust page");
-    expect(s2!.body).toContain("re-checks them every hour");
+  it("pitches Trust as the AI-native platform, with its own link", () => {
+    const [s1, s2, s3, s4] = buildSequence("TRUST", ctx);
+    expect(s1!.subject).toBe("SOC 2 and security reviews at Fairing");
+    expect(s1!.body).toContain("I'm Ashish, founder of Korrali Trust, an AI-native compliance platform for SOC 2, ISO 27001 and ISO 42001.");
+    expect(s1!.body).toContain("AI reviews each control's evidence the way an auditor would");
+    expect(s1!.body).toContain("with the source cited for every answer");
+    expect(s1!.body).toContain("read-only MCP server");
+    expect(s1!.body).toContain("$3,000 a year for up to 50 people");
+    expect(s1!.body).toContain("14-day trial");
+    for (const s of [s2!, s3!, s4!]) expect(s.body).toContain("https://trust.korrali.com");
+    expect(s2!.body).toContain("AI inventory");
+    expect(s3!.body).toContain("reply with it attached and I'll send it back completed within two days");
+  });
+
+  it("never promises anything free in Trust: the trial needs a card", () => {
+    for (const previouslyContacted of [false, true]) {
+      const text = buildSequence("TRUST", { ...ctx, previouslyContacted }).map((s) => `${s.subject}\n${s.body}`).join("\n");
+      expect(text).not.toMatch(/\bfree\b|no card|without a card|\$299|\$599/i);
+    }
+  });
+
+  it("re-introduces Trust to prospects who got a pre-relaunch email", () => {
+    const [fresh] = buildSequence("TRUST", ctx);
+    const [again] = buildSequence("TRUST", { ...ctx, previouslyContacted: true });
+    expect(fresh!.body).not.toContain("I wrote to you a while back");
+    expect(again!.body).toContain("I wrote to you a while back about Korrali Trust. It has changed a lot since: it's now an AI-native compliance platform");
+    expect(again!.subject).toBe(fresh!.subject);
   });
 
   it("falls back to a neutral greeting without a first name", () => {
@@ -78,6 +95,10 @@ describe("lintLines", () => {
 });
 
 describe("lintLines — numbers and tech names", () => {
+  it("allows standard names like SOC 2 and ISO 27001, but no other figure", () => {
+    expect(lintLines({ whyLine: "Acme sells to banks, which ask for a SOC 2 report and ISO 27001 before signing", angleLine: ctx.angleLine })).toEqual([]);
+    expect(lintLines({ whyLine: "Acme has 40 enterprise customers asking for SOC 2", angleLine: ctx.angleLine }).join()).toMatch(/contains a number/);
+  });
   it("rejects any figure", () => {
     expect(lintLines({ whyLine: "With $11M in annual revenue running through Stripe, leaks add up", angleLine: ctx.angleLine }).join()).toMatch(/contains a number/);
   });

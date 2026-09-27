@@ -6,6 +6,7 @@ import { HAIKU_MODEL, callHaiku, haikuAvailable } from "@/lib/ai/haiku";
 import {
   buildSequence,
   FALLBACK_LINES,
+  TRUST_RELAUNCH_AT,
   type TemplateProduct,
   type TemplateStep,
 } from "@/lib/sending/templates";
@@ -100,7 +101,8 @@ export function lintLines(
     if (/\b(Korrali|I'm Ashish|my name)\b/i.test(text)) problems.push(`${key}: re-introduces the product or sender`);
     // No figures at all: a live draft quoted Apollo's revenue estimate back
     // at the prospect ("$11M in annual revenue").
-    if (/\d/.test(text)) problems.push(`${key}: contains a number`);
+    // Standard names ("SOC 2", "ISO 27001") aren't figures about the prospect.
+    if (/\d/.test(text.replace(/\bSOC ?2\b|\bISO(?:\/IEC)? ?\d{4,5}\b/gi, ""))) problems.push(`${key}: contains a number`);
     // Stripe's retry window is configurable per account, so any stated
     // timing ("after a few days", "within a week") is a guess about them.
     if (RETRY_CONTEXT.test(text) && TIME_SPAN.test(text)) {
@@ -123,10 +125,11 @@ const PRODUCT_GUIDE: Record<TemplateProduct, { problem: string; angles: string; 
       "Stripe retries failed payments automatically for a limited period, then stops. Stripe cannot know which price or coupon a business intended a customer to be on.",
   },
   TRUST: {
-    problem: "the time enterprise security questionnaires take",
+    problem: "getting ready for a SOC 2 or ISO 27001 audit and answering enterprise security reviews",
     angles:
-      "security reviews now adding a section on AI (models used, data they see, oversight); every buyer asking the same questions in a different spreadsheet; security review holding up a deal; answers scattered across old questionnaires and documents",
-    facts: "Enterprise buyers usually send a security questionnaire before signing a new vendor.",
+      "security reviews now adding a section on AI (models used, data they see, human oversight); a buyer asking for a SOC 2 report before signing; evidence going stale between audits; every buyer asking the same questions in a different spreadsheet; security review holding up a deal",
+    facts:
+      "Enterprise buyers usually ask for a SOC 2 report or a security questionnaire before signing a new vendor. A SOC 2 Type II audit covers a period of months, so evidence has to be kept throughout it.",
   },
 };
 
@@ -239,7 +242,21 @@ export async function generateEmailSequence(input: {
     lines = { whyLine: fb.whyLine(companyName), angleLine: fb.angleLine };
   }
 
+  // Trust only: did they get an email from before the relaunch? Superseded
+  // messages (stepNumber cleared) count too — they still read them.
+  const previouslyContacted =
+    product === "TRUST" &&
+    (await prisma.emailMessage.count({
+      where: {
+        direction: "OUTBOUND",
+        sentAt: { lt: TRUST_RELAUNCH_AT },
+        contact: { email: contact.email },
+        outreach: { campaign: { product: "TRUST" } },
+      },
+    })) > 0;
+
   const steps = buildSequence(product, {
+    previouslyContacted,
     firstName: contact.firstName,
     company: companyName,
     whyLine: lines.whyLine,

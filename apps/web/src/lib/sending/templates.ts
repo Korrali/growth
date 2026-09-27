@@ -9,8 +9,9 @@
 // team (a Stripe QA engineer, versions 0.1.0–0.1.2) and approved for the App
 // Marketplace — never "certified" or "endorsed" by Stripe, which Marketplace
 // rules don't allow apps to imply; Trust helps
-// companies PREPARE for SOC 2 / ISO 27001 (only an auditor makes anyone
-// compliant — see the positioning doctrine).
+// companies PREPARE for SOC 2 / ISO 27001 / ISO 42001 (only an auditor makes
+// anyone compliant — see the positioning doctrine), and nothing in Trust is
+// free (card-required 14-day trial).
 //
 // Follow-ups (steps 2-4) are sent as replies in the step-1 thread
 // ("Re: <step 1 subject>", see sender.ts), so their subjects are not shown.
@@ -22,7 +23,13 @@ export type TemplateProduct = "REVENUE" | "TRUST";
 // the old text; on 2026-09-25 18 prospects got the pre-template format from
 // drafts written the night before. The sender rewrites any draft older than
 // this before sending it (sender.ts).
-export const TEMPLATE_REVISED_AT = new Date("2026-09-25T07:12:00Z");
+export const TEMPLATE_REVISED_AT = new Date("2026-09-27T19:00:00Z");
+
+// Trust was relaunched as an AI-native compliance platform. Anyone sent a
+// Trust email before this got the old questionnaire-tool pitch (with a free
+// first questionnaire that no longer exists), so their email 1 re-introduces
+// the product instead of introducing it (email-generator.ts).
+export const TRUST_RELAUNCH_AT = new Date("2026-09-27T19:00:00Z");
 
 export function isStaleDraft(draftUpdatedAt: Date): boolean {
   return draftUpdatedAt < TEMPLATE_REVISED_AT;
@@ -35,6 +42,8 @@ export interface TemplateContext {
   whyLine: string;
   /** Step 3: one or two sentences on a different, relevant angle. */
   angleLine: string;
+  /** Trust: they got an earlier Trust email, so email 1 re-introduces instead of introducing. */
+  previouslyContacted?: boolean;
 }
 
 export interface TemplateStep {
@@ -143,58 +152,73 @@ ${sig}`,
     ];
   }
 
+  // Trust: an AI-native compliance platform since the 2026-09 relaunch. Every
+  // claim below is backed by code on trust.korrali.com — AI evidence review
+  // (lib/ai/evidence-reviewer.ts), answers citing live evidence
+  // (lib/ai/evidence-context.ts), the AI inventory + ISO 42001, the read-only
+  // MCP server (lib/mcp) — and the published price and card-required trial
+  // (lib/pricing.ts, actions/checkout.ts). Nothing is free: never promise a
+  // free questionnaire or "no card". Workflow language only: it helps you
+  // prepare; only an auditor issues a report.
+  const trustSubject = `SOC 2 and security reviews at ${co}`;
+  const opener = ctx.previouslyContacted
+    ? `I wrote to you a while back about Korrali Trust. It has changed a lot since: it's now an AI-native compliance platform for SOC 2, ISO 27001 and ISO 42001.`
+    : `I'm Ashish, founder of Korrali Trust, an AI-native compliance platform for SOC 2, ISO 27001 and ISO 42001.`;
   return [
     {
       stepNumber: 1,
-      subject: `Security questionnaires at ${co}`,
+      subject: trustSubject,
       body: `${hi}
 
-I'm Ashish, founder of Korrali Trust. It drafts answers to enterprise security questionnaires from your existing security documents: every answer cites its source, gaps are flagged instead of guessed, and it exports back into the buyer's original spreadsheet. It also helps you prepare for SOC 2 and ISO 27001, with a control dashboard mapped to both, a generated policy pack, and a public trust page.
+${opener} It connects read-only to your cloud, code and identity tools, and AI reviews each control's evidence the way an auditor would. The same live evidence answers your security questionnaires, with the source cited for every answer. An AI inventory covers the AI questions buyers now ask, and your own agents can read all of it through a read-only MCP server.
 
 ${why}
 
-Your first questionnaire is free, with no card and no time limit. Who handles these at ${co} today?
+It's $3,000 a year for up to 50 people, everything included, with a 14-day trial. Worth a look for ${co}?
 
 ${sig}`,
     },
     {
       stepNumber: 2,
-      subject: `Security questionnaires at ${co}`,
+      subject: trustSubject,
       body: `${hi}
 
-The next time a customer sends ${co} a security questionnaire, you can run it through Korrali Trust. The first one is free:
+In case it's easier to just look:
 
 ${p.link}
 
-From the same documents it also builds your policy pack and a public trust page, so buyers can check your security posture before they send a questionnaire at all. It connects read-only to the tools you already use (AWS, Google Cloud, Azure, GitHub, GitLab, Google Workspace, Okta and Rippling) and re-checks them every hour, so your SOC 2 and ISO 27001 evidence stays current.
+What the AI does, concretely:
+- Reads each control's evidence like an auditor: whether it's enough, what's missing, and on which system. Your team approves every verdict.
+- Answers security questionnaires from your approved facts and what the connectors observed, like "MFA is enforced for every AWS user, checked 2 hours ago". Anything it can't support is flagged instead of guessed, and answers export into the buyer's own spreadsheet.
+- Keeps an AI inventory (models, data, human oversight) for ISO 42001 and the AI section of security reviews.
 
-You review and approve everything before it goes out. Would that save your team time?
+It connects read-only to AWS, Google Cloud, Azure, GitHub, GitLab, Google Workspace, Okta, Microsoft 365, Jira, Slack and more, and re-checks them every hour. Would that save ${co} time?
 
 ${sig}`,
     },
     {
       stepNumber: 3,
-      subject: `Security questionnaires at ${co}`,
+      subject: trustSubject,
       body: `${hi}
 
 ${angle}
 
-Korrali Trust drafts those answers from the documents you already have, with the source cited for each:
+Korrali Trust keeps that evidence current and answers from it, citing the source for each answer:
 
 ${p.link}
 
-Or, if one is on your desk right now, just reply with it attached and I'll send it back completed within two days.
+Or, if a security questionnaire is on your desk right now, reply with it attached and I'll send it back completed within two days.
 
 ${sig}`,
     },
     {
       stepNumber: 4,
-      subject: `Security questionnaires at ${co}`,
+      subject: trustSubject,
       body: `${hi}
 
-I'll leave it here. If security reviews aren't on your plate, who at ${co} handles them?
+I'll leave it here. If compliance and security reviews aren't on your plate, who at ${co} handles them?
 
-Your first questionnaire is free whenever one comes in:
+The 14-day trial is here whenever it's useful:
 
 ${p.link}
 
@@ -211,7 +235,7 @@ export const FALLBACK_LINES: Record<TemplateProduct, { whyLine: (co: string) => 
       "Stripe retries failed payments on its own, but it can't know which price or coupon you meant a customer to be on, so billing that drifted from what you intended stays invisible.",
   },
   TRUST: {
-    whyLine: (co) => `Companies selling to larger customers, like ${co}, usually get a security questionnaire with almost every deal.`,
+    whyLine: (co) => `Companies selling to larger customers, like ${co}, are usually asked for a SOC 2 report or a security questionnaire before a deal closes.`,
     angleLine:
       "More and more security reviews now include a section on AI: which models you use, what data they see, and who oversees them.",
   },
