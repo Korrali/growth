@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSequence, buildFirmSequence, tidySentence, FALLBACK_LINES, FIRM_FALLBACK_LINES, FIRM_TEMPLATE_REVISED_AT, isStaleDraft, TEMPLATE_REVISED_AT } from "@/lib/sending/templates";
+import { buildSequence, buildFirmSequence, tidySentence, FALLBACK_LINES, FIRM_FALLBACK_LINES, FIRM_TEMPLATE_REVISED_AT, isStaleDraft, shortFirmName, TEMPLATE_REVISED_AT } from "@/lib/sending/templates";
 import { lintLines } from "@/lib/ai/email-generator";
 import { timezoneForCountry } from "@/lib/sending/timezone";
 
@@ -188,5 +188,16 @@ describe("buildFirmSequence", () => {
   it("a digit in the firm's own name is not a figure", () => {
     expect(lintLines({ whyLine: "Level10 CFO runs finance for SaaS startups.", angleLine: "Retired prices linger." }, { companyName: "Level10 CFO" })).toEqual([]);
     expect(lintLines({ whyLine: "Level10 CFO serves 40 SaaS startups.", angleLine: "Retired prices linger." }, { companyName: "Level10 CFO" })).toContain("whyLine: contains a number");
+  });
+});
+
+describe("shortFirmName", () => {
+  it("drops a trailing legal suffix only", () => {
+    expect(shortFirmName("Thryve Group LLC")).toBe("Thryve Group");
+    expect(shortFirmName("MARFI Systems, Inc.")).toBe("MARFI Systems");
+    expect(shortFirmName("Kidder & Schultz, CPAs")).toBe("Kidder & Schultz, CPAs");
+    expect(shortFirmName("Resolute Consulting PLLC")).toBe("Resolute Consulting");
+    expect(shortFirmName("BARR Advisory, P.A.")).toBe("BARR Advisory");
+    expect(shortFirmName("Level10 CFO")).toBe("Level10 CFO");
   });
 });

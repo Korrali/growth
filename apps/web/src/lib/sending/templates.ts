@@ -42,8 +42,8 @@ export const TRUST_RELAUNCH_AT = TEMPLATE_REVISED_AT.TRUST;
 // Same rule for the FIRM templates (buildFirmSequence), dated separately so
 // an edit to one audience's copy doesn't rewrite the other's drafts.
 export const FIRM_TEMPLATE_REVISED_AT: Record<TemplateProduct, Date> = {
-  REVENUE: new Date("2026-09-30T00:00:00Z"),
-  TRUST: new Date("2026-09-30T00:00:00Z"),
+  REVENUE: new Date("2026-09-30T12:50:00Z"),
+  TRUST: new Date("2026-09-30T12:50:00Z"),
 };
 
 export type TemplateAudience = "DIRECT" | "FIRM";
@@ -353,6 +353,13 @@ ${sig}`,
     },
     { stepNumber: 4, subject, body: leave },
   ];
+}
+
+/** "Thryve Group LLC" → "Thryve Group": legal suffixes read badly in "…'s clients". */
+export function shortFirmName(name: string): string {
+  return name
+    .replace(/,?\s+(LLC|L\.L\.C\.|PLLC|LLP|Inc\.?|Incorporated|Corp\.?|Corporation|Co\.|Ltd\.?|P\.?A\.|P\.?C\.)$/i, "")
+    .trim() || name;
 }
 
 /** Used when the writer is unavailable or its lines fail the checks twice (FIRM campaigns). */

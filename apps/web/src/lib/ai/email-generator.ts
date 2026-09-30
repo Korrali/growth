@@ -7,6 +7,7 @@ import {
   buildFirmSequence,
   buildSequence,
   FALLBACK_LINES,
+  shortFirmName,
   FIRM_FALLBACK_LINES,
   TRUST_RELAUNCH_AT,
   type TemplateAudience,
@@ -228,7 +229,8 @@ export async function generateEmailSequence(input: {
   const product: TemplateProduct = campaign.product;
   const audience: TemplateAudience = campaign.audience;
   const system = systemPrompt(product, audience, campaign.customIcpProfile);
-  const companyName = outreach.company?.name ?? outreach.company?.domain ?? "your team";
+  const fullName = outreach.company?.name ?? outreach.company?.domain ?? "your team";
+  const companyName = audience === "FIRM" ? shortFirmName(fullName) : fullName;
 
   const inputData = {
     contact: { firstName: contact.firstName, title: contact.title },
