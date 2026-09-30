@@ -17,6 +17,19 @@
  *    automatically; if the product has no ACTIVE campaign they wait for one.
  *
  * Existing contacts (by email) are never touched or re-enrolled. Safe to re-run.
+ *
+ * FIRM mode — a hand-picked list of service firms (fractional CFOs, vCISOs):
+ *
+ *   pnpm tsx scripts/import-apollo.ts --file firms.csv --env ... --product REVENUE \
+ *     --firm-campaign "Revenue: fractional CFO firms" --audience "Fractional CFO ..." [--dry-run]
+ *
+ * Creates (or reuses) a FIRM campaign for the product — status DRAFT, send
+ * delays copied from the product's ACTIVE direct campaign — and enrolls every
+ * qualifying lead into it directly, in file order. No fit scoring: the
+ * product ICPs reject service firms by design, so the company is marked
+ * fitScore 7 (the send gate needs >= 6) with a reason saying it was hand-picked.
+ * Companies already in Growth are skipped, never re-scored or re-enrolled.
+ * Nothing sends until the campaign is set ACTIVE.
  */
 import { readFileSync } from "fs";
 import { basename } from "path";
@@ -42,6 +55,10 @@ async function main() {
   const dryRun = process.argv.includes("--dry-run");
   const envFile = arg("env");
   if (envFile) loadEnvFile(envFile);
+  const firmCampaign = arg("firm-campaign");
+  if (firmCampaign && product !== "REVENUE" && product !== "TRUST") {
+    throw new Error("--firm-campaign needs --product REVENUE or TRUST");
+  }
 
   // Imported after the env is loaded: db.ts and queue.ts read it on first use.
   const { parseApolloCsv } = await import("@/lib/import/apollo");
@@ -56,7 +73,7 @@ async function main() {
   const existing = new Set(
     (await prisma.contact.findMany({ select: { email: true } })).map((c) => c.email.toLowerCase()),
   );
-  const { leads, skipped } = parseApolloCsv(text, existing, product);
+  const { leads, skipped } = parseApolloCsv(text, existing, product, { firm: !!firmCampaign });
 
   console.log(`file: ${basename(file)}`);
   console.log(`qualifying leads: ${leads.length}`);
@@ -72,6 +89,12 @@ async function main() {
       console.log(`  [${l.product}] ${l.email} · ${l.title} · ${l.companyName} (${l.domain}) · ${l.employeeCount ?? "?"} ppl · ${l.country ?? ""}`);
     }
     console.log("dry run — nothing written");
+    await prisma.$disconnect();
+    return;
+  }
+
+  if (firmCampaign) {
+    await importFirmLeads(leads, product as "REVENUE" | "TRUST", firmCampaign, arg("audience") ?? null, basename(file));
     await prisma.$disconnect();
     return;
   }
@@ -155,6 +178,112 @@ async function main() {
 
   await (await getBoss()).stop({ graceful: true }).catch(() => {});
   await prisma.$disconnect();
+}
+
+type Lead = import("@/lib/import/apollo").ApolloLead;
+
+async function importFirmLeads(
+  leads: Lead[],
+  product: "REVENUE" | "TRUST",
+  name: string,
+  audienceProfile: string | null,
+  file: string,
+): Promise<void> {
+  const { prisma } = await import("@/lib/db");
+  const { timezoneForCountry } = await import("@/lib/sending/timezone");
+
+  let campaign = await prisma.campaign.findFirst({ where: { name, product, audience: "FIRM", clientId: null } });
+  if (!campaign) {
+    const direct = await prisma.campaign.findFirst({
+      where: { product, status: "ACTIVE", clientId: null, audience: "DIRECT" },
+      include: { sequenceSteps: { orderBy: { stepNumber: "asc" } } },
+    });
+    if (!direct) throw new Error(`no ACTIVE ${product} campaign to copy send delays from`);
+    campaign = await prisma.campaign.create({
+      data: {
+        name,
+        product,
+        audience: "FIRM",
+        status: "DRAFT",
+        testMode: false,
+        customIcpProfile: audienceProfile,
+        dailyLimit: direct.dailyLimit,
+        perDomainLimit: direct.perDomainLimit,
+        sendWindowStart: direct.sendWindowStart,
+        sendWindowEnd: direct.sendWindowEnd,
+        timezone: direct.timezone,
+        maxFollowUps: direct.maxFollowUps,
+        // Bodies come from templates.ts buildFirmSequence; these rows carry the delays.
+        sequenceSteps: {
+          create: direct.sequenceSteps.map((s) => ({
+            stepNumber: s.stepNumber,
+            delayDays: s.delayDays,
+            subjectTemplate: "(templates.ts buildFirmSequence)",
+            bodyTemplate: "(templates.ts buildFirmSequence)",
+            ctaType: s.ctaType,
+          })),
+        },
+      },
+    });
+    console.log(`created FIRM campaign ${campaign.id} (DRAFT)`);
+  } else {
+    console.log(`using FIRM campaign ${campaign.id} (${campaign.status})`);
+  }
+
+  const source = `apollo:${file}`;
+  let enrolled = 0;
+  let known = 0;
+  const now = Date.now();
+  for (const lead of leads) {
+    if (await prisma.company.findUnique({ where: { domain: lead.domain }, select: { id: true } })) {
+      known += 1;
+      continue;
+    }
+    const company = await prisma.company.create({
+      data: {
+        name: lead.companyName,
+        domain: lead.domain,
+        website: lead.website,
+        industry: lead.industry,
+        employeeCount: lead.employeeCount,
+        detectedTechs: lead.technologies,
+        description: lead.description,
+        acquisitionSource: source,
+        fitProduct: product,
+        fitScore: 7,
+        fitScoredAt: new Date(),
+        fitReasoning: `Hand-picked service firm for FIRM campaign "${name}" (${source}); not AI-scored.`,
+      },
+    });
+    const contact = await prisma.contact.create({
+      data: {
+        companyId: company.id,
+        email: lead.email,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        title: lead.title,
+        linkedinUrl: lead.linkedinUrl,
+        timezone: timezoneForCountry(lead.country),
+        emailStatus: "VALID",
+        isBuyer: true,
+        buyerPersona: lead.title,
+      },
+    });
+    // File order is send order: the due-check cron picks up nextSendAt <= now.
+    await prisma.outreach.create({
+      data: {
+        contactId: contact.id,
+        companyId: company.id,
+        campaignId: campaign.id,
+        status: "PENDING",
+        currentStep: 1,
+        nextSendAt: new Date(now + enrolled * 1000),
+      },
+    });
+    enrolled += 1;
+  }
+  console.log(`enrolled: ${enrolled}`);
+  if (known) console.log(`skipped (company already in Growth): ${known}`);
 }
 
 main().catch((err) => {

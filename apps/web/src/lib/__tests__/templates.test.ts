@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSequence, tidySentence, FALLBACK_LINES, isStaleDraft, TEMPLATE_REVISED_AT } from "@/lib/sending/templates";
+import { buildSequence, buildFirmSequence, tidySentence, FALLBACK_LINES, FIRM_FALLBACK_LINES, FIRM_TEMPLATE_REVISED_AT, isStaleDraft, TEMPLATE_REVISED_AT } from "@/lib/sending/templates";
 import { lintLines } from "@/lib/ai/email-generator";
 import { timezoneForCountry } from "@/lib/sending/timezone";
 
@@ -151,5 +151,42 @@ describe("timezoneForCountry", () => {
     expect(timezoneForCountry("Austria")).toBe("Europe/Vienna");
     expect(timezoneForCountry("Atlantis")).toBeNull();
     expect(timezoneForCountry(null)).toBeNull();
+  });
+});
+
+describe("buildFirmSequence", () => {
+  const firm = { ...ctx, company: "Level10 CFO", whyLine: "Level10 CFO runs finance for SaaS startups", angleLine: "A client can keep billing on a retired price." };
+
+  it("asks firms for a conversation, never a price or install link", () => {
+    for (const product of ["REVENUE", "TRUST"] as const) {
+      const steps = buildFirmSequence(product, firm);
+      expect(steps.map((s) => s.stepNumber)).toEqual([1, 2, 3, 4]);
+      const text = steps.map((s) => s.body).join("\n");
+      expect(text).not.toMatch(/https?:\/\/|\$\d|install it|14-day trial/i);
+      expect(steps[0]!.body).toContain("Would you be open to a 20-minute call?");
+      expect(steps[0]!.body).toContain("Level10 CFO runs finance for SaaS startups.");
+      expect(steps[1]!.body).toContain("sign-off");
+      expect(steps[2]!.body.startsWith(`Hi Matt,\n\n${firm.angleLine}`)).toBe(true);
+    }
+    expect(buildFirmSequence("REVENUE", firm)[0]!.subject).toBe("Stripe billing checks for Level10 CFO's clients");
+    expect(buildFirmSequence("TRUST", firm)[0]!.subject).toBe("Security questionnaires for Level10 CFO's clients");
+  });
+
+  it("dates firm drafts separately from direct ones", () => {
+    const t = new Date(FIRM_TEMPLATE_REVISED_AT.REVENUE.getTime() - 1000);
+    expect(isStaleDraft("REVENUE", t, "FIRM")).toBe(true);
+    expect(isStaleDraft("REVENUE", new Date(FIRM_TEMPLATE_REVISED_AT.REVENUE.getTime() + 1000), "FIRM")).toBe(false);
+  });
+
+  it("firm fallback lines pass the line checks", () => {
+    for (const product of ["REVENUE", "TRUST"] as const) {
+      const fb = FIRM_FALLBACK_LINES[product];
+      expect(lintLines({ whyLine: fb.whyLine("Level10 CFO"), angleLine: fb.angleLine }, { companyName: "Level10 CFO" })).toEqual([]);
+    }
+  });
+
+  it("a digit in the firm's own name is not a figure", () => {
+    expect(lintLines({ whyLine: "Level10 CFO runs finance for SaaS startups.", angleLine: "Retired prices linger." }, { companyName: "Level10 CFO" })).toEqual([]);
+    expect(lintLines({ whyLine: "Level10 CFO serves 40 SaaS startups.", angleLine: "Retired prices linger." }, { companyName: "Level10 CFO" })).toContain("whyLine: contains a number");
   });
 });

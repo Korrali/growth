@@ -58,6 +58,11 @@ const BUYER_TITLES: Record<string, RegExp> = {
     /\b(founder|co-?founder|ceo|chief executive|owner|president|cto|chief technology|chief technical|ciso|chief information security|security|compliance|grc|trust|vp,? (of )?engineering|vice president,? (of )?engineering|head of engineering)\b/i,
 };
 
+// Service firms (FIRM campaigns) are run by partners and principals, titles
+// that at a product company would not mark the buyer ("Principal Engineer").
+const FIRM_BUYER_TITLES =
+  /\b(partner|principal|managing director|v-?ciso|virtual ciso|fractional)\b/i;
+
 const ACQUIRED = /\bacq(\.|uired)?\b|\bacquired by\b|\ba (division|subsidiary) of\b/i;
 
 // Apollo lists 50–100+ technologies per company. The fit scorer only needs the
@@ -91,7 +96,8 @@ export function titleRank(title: string): number {
   return TITLE_RANK.find(([re]) => re.test(title))?.[1] ?? 4;
 }
 
-export function isBuyerTitle(title: string, product = "REVENUE"): boolean {
+export function isBuyerTitle(title: string, product = "REVENUE", firm = false): boolean {
+  if (firm && FIRM_BUYER_TITLES.test(title)) return true;
   return (BUYER_TITLES[product] ?? BUYER_TITLES.REVENUE!).test(title);
 }
 
@@ -113,6 +119,7 @@ export function parseApolloCsv(
   text: string,
   existingEmails: Set<string> = new Set(),
   product = "REVENUE",
+  opts: { firm?: boolean } = {},
 ): ApolloParseResult {
   const { data } = Papa.parse<Record<string, string>>(text.replace(/^﻿/, ""), {
     header: true,
@@ -137,7 +144,7 @@ export function parseApolloCsv(
     // Routed to Revenue by Stripe usage, a CTO still owns the Stripe
     // integration, so Revenue also accepts Trust's technical titles there.
     const title = col(row, "Title");
-    const buyer = isBuyerTitle(title, leadProduct) ||
+    const buyer = isBuyerTitle(title, leadProduct, opts.firm) ||
       (product === "ROUTE" && leadProduct === "REVENUE" && isBuyerTitle(title, "TRUST"));
     if (!buyer) { skip("not_decision_maker"); continue; }
 

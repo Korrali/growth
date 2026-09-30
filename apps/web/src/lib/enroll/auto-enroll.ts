@@ -57,7 +57,9 @@ export async function runAutoEnroll(): Promise<AutoEnrollSummary> {
   const campaignFor: Record<string, string | null> = {};
   for (const product of ["TRUST", "REVENUE"] as const) {
     const campaign = await prisma.campaign.findFirst({
-      where: { product, status: CampaignStatus.ACTIVE, clientId: null },
+      // FIRM campaigns hold a hand-picked list (import-apollo.ts --campaign);
+      // scored companies go to the product's DIRECT campaign only.
+      where: { product, status: CampaignStatus.ACTIVE, clientId: null, audience: "DIRECT" },
       orderBy: { createdAt: "desc" },
       select: { id: true },
     });

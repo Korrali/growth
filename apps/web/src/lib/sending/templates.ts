@@ -39,8 +39,22 @@ export const TEMPLATE_REVISED_AT: Record<TemplateProduct, Date> = {
 // the product instead of introducing it (email-generator.ts).
 export const TRUST_RELAUNCH_AT = TEMPLATE_REVISED_AT.TRUST;
 
-export function isStaleDraft(product: TemplateProduct, draftUpdatedAt: Date): boolean {
-  return draftUpdatedAt < TEMPLATE_REVISED_AT[product];
+// Same rule for the FIRM templates (buildFirmSequence), dated separately so
+// an edit to one audience's copy doesn't rewrite the other's drafts.
+export const FIRM_TEMPLATE_REVISED_AT: Record<TemplateProduct, Date> = {
+  REVENUE: new Date("2026-09-30T00:00:00Z"),
+  TRUST: new Date("2026-09-30T00:00:00Z"),
+};
+
+export type TemplateAudience = "DIRECT" | "FIRM";
+
+export function isStaleDraft(
+  product: TemplateProduct,
+  draftUpdatedAt: Date,
+  audience: TemplateAudience = "DIRECT",
+): boolean {
+  const revised = audience === "FIRM" ? FIRM_TEMPLATE_REVISED_AT : TEMPLATE_REVISED_AT;
+  return draftUpdatedAt < revised[product];
 }
 
 export interface TemplateContext {
@@ -234,6 +248,126 @@ ${sig}`,
     },
   ];
 }
+
+// FIRM campaigns write to service firms that run the problem for many clients
+// (fractional CFOs and bookkeepers for Revenue, vCISOs and compliance
+// consultancies for Trust). The ask is a conversation about how they handle it
+// today, not a sign-up: no price and no install link, because a firm that
+// first sees a single-company price anchors on it (firm-channel strategy).
+// The free offer in step 2 needs the client's sign-off — the firm having
+// access does not authorise us to touch its client's data.
+export function buildFirmSequence(product: TemplateProduct, ctx: TemplateContext): TemplateStep[] {
+  const hi = greeting(ctx.firstName);
+  const sig = signature(product);
+  const why = tidySentence(ctx.whyLine);
+  const angle = tidySentence(ctx.angleLine);
+  const co = ctx.company;
+  const leave = `${hi}
+
+I'll leave it here. If this isn't something ${co} looks after, no problem, and thanks for reading.
+
+If it ever is, a reply to this email reaches me directly.
+
+${sig}`;
+
+  if (product === "REVENUE") {
+    const subject = `Stripe billing checks for ${co}'s clients`;
+    return [
+      {
+        stepNumber: 1,
+        subject,
+        body: `${hi}
+
+I'm Ashish, founder of Korrali Revenue, an app on the Stripe App Marketplace that flags billing that has drifted from what a business intended: customers still on prices it retired, coupons that never expired, subscriptions that quietly stopped invoicing, and failed payments nobody followed up.
+
+${why}
+
+I'm speaking with fractional CFOs and finance firms about how they check client billing in Stripe today, before deciding what to build for firms. Would you be open to a 20-minute call? I want to learn how you handle it, not sell you anything.
+
+${sig}`,
+      },
+      {
+        stepNumber: 2,
+        subject,
+        body: `${hi}
+
+To make a call worth your time: pick one client that bills through Stripe and, with their sign-off, I'll run Korrali Revenue on that account and walk you through what it flags. It's free, and you keep the findings.
+
+Every finding shows the customer and the amount, so you can check it in the client's own Stripe dashboard. A retired price or a long-running coupon can be an agreed deal term, so nothing counts as lost revenue until you or the client confirm it.
+
+Would that be useful for one of ${co}'s clients?
+
+${sig}`,
+      },
+      {
+        stepNumber: 3,
+        subject,
+        body: `${hi}
+
+${angle}
+
+How does ${co} check for this across clients today, if at all? Even a two-line reply would help me.
+
+${sig}`,
+      },
+      { stepNumber: 4, subject, body: leave },
+    ];
+  }
+
+  const subject = `Security questionnaires for ${co}'s clients`;
+  return [
+    {
+      stepNumber: 1,
+      subject,
+      body: `${hi}
+
+I'm Ashish, founder of Korrali Trust, an AI-native compliance platform for SOC 2, ISO 27001 and ISO 42001. It keeps each control's evidence current through read-only connections to cloud, code and identity tools, and answers security questionnaires from that evidence, citing the source for every answer.
+
+${why}
+
+I'm speaking with vCISOs and compliance consultants about how they handle client questionnaires and audit evidence today, before deciding what to build for firms. Would you be open to a 20-minute call? I want to learn how you handle it, not sell you anything.
+
+${sig}`,
+    },
+    {
+      stepNumber: 2,
+      subject,
+      body: `${hi}
+
+To make a call worth your time: send me one security questionnaire a client of yours is working on, with their sign-off, and I'll send back draft answers within two days, with every answer the client needs to confirm clearly flagged. It's free.
+
+Would that help with one of ${co}'s clients?
+
+${sig}`,
+    },
+    {
+      stepNumber: 3,
+      subject,
+      body: `${hi}
+
+${angle}
+
+How does ${co} handle this across clients today? Even a two-line reply would help me.
+
+${sig}`,
+    },
+    { stepNumber: 4, subject, body: leave },
+  ];
+}
+
+/** Used when the writer is unavailable or its lines fail the checks twice (FIRM campaigns). */
+export const FIRM_FALLBACK_LINES: Record<TemplateProduct, { whyLine: (co: string) => string; angleLine: string }> = {
+  REVENUE: {
+    whyLine: (co) => `Firms like ${co} that run finance for subscription clients are often the first to see billing that no longer matches what was sold.`,
+    angleLine:
+      "A client can keep billing customers on a price it retired, or on a discount that outlived the deal, and Stripe has no way to know that wasn't intended.",
+  },
+  TRUST: {
+    whyLine: (co) => `Firms like ${co} that look after security and compliance for several clients tend to answer the same questionnaire questions again for each one.`,
+    angleLine:
+      "More security reviews now include a section on AI: which models a company uses, what data they see, and who oversees them.",
+  },
+};
 
 /** Used when the writer is unavailable or its lines fail the checks twice. */
 export const FALLBACK_LINES: Record<TemplateProduct, { whyLine: (co: string) => string; angleLine: string }> = {

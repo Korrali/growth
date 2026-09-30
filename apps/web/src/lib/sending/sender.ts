@@ -135,7 +135,7 @@ export async function sendOutreachStep(
   const stale =
     !!draft &&
     (product === "REVENUE" || product === "TRUST") &&
-    isStaleDraft(product, draft.updatedAt);
+    isStaleDraft(product, draft.updatedAt, outreach.campaign.audience);
   if (!draft || stale) {
     // A stale draft (written before the current template) is treated like a
     // missing one: regenerated, then sent on the retry.

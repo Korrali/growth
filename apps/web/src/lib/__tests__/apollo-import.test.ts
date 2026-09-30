@@ -116,3 +116,12 @@ describe("ROUTE mode (cross-use)", () => {
     expect(titleRank("VP Engineering")).toBe(4);
   });
 });
+
+describe("firm imports", () => {
+  it("accept partners and principals only when importing firms", () => {
+    const row = 'Jo,Ray,Managing Partner,Ray CFO,jo@raycfo.com,Verified,5,accounting,"fractional cfo",,http://raycfo.com,United States,,';
+    expect(parseApolloCsv(csv(row)).leads).toHaveLength(0);
+    expect(parseApolloCsv(csv(row), new Set(), "REVENUE", { firm: true }).leads).toHaveLength(1);
+    expect(isBuyerTitle("Principal Engineer", "TRUST")).toBe(false);
+  });
+});

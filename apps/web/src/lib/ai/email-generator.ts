@@ -4,9 +4,12 @@ import { WRITING_MODEL } from "@/lib/ai/models";
 import { PRODUCTS } from "@/lib/products";
 import { HAIKU_MODEL, callHaiku, haikuAvailable } from "@/lib/ai/haiku";
 import {
+  buildFirmSequence,
   buildSequence,
   FALLBACK_LINES,
+  FIRM_FALLBACK_LINES,
   TRUST_RELAUNCH_AT,
+  type TemplateAudience,
   type TemplateProduct,
   type TemplateStep,
 } from "@/lib/sending/templates";
@@ -78,7 +81,7 @@ function wordCount(s: string): number {
  */
 export function lintLines(
   lines: GeneratedLines,
-  opts: { techNames?: string[]; allowedTech?: string[] } = {},
+  opts: { techNames?: string[]; allowedTech?: string[]; companyName?: string } = {},
 ): string[] {
   const problems: string[] = [];
   const allowed = new Set((opts.allowedTech ?? []).map((t) => t.toLowerCase()));
@@ -102,7 +105,10 @@ export function lintLines(
     // No figures at all: a live draft quoted Apollo's revenue estimate back
     // at the prospect ("$11M in annual revenue").
     // Standard names ("SOC 2", "ISO 27001") aren't figures about the prospect.
-    if (/\d/.test(text.replace(/\bSOC ?2\b|\bISO(?:\/IEC)? ?\d{4,5}\b/gi, ""))) problems.push(`${key}: contains a number`);
+    // Nor is a digit in the prospect's own name ("Level10 CFO").
+    let unnamed = text.replace(/\bSOC ?2\b|\bISO(?:\/IEC)? ?\d{4,5}\b/gi, "");
+    if (opts.companyName) unnamed = unnamed.split(opts.companyName).join("");
+    if (/\d/.test(unnamed)) problems.push(`${key}: contains a number`);
     // Stripe's retry window is configurable per account, so any stated
     // timing ("after a few days", "within a week") is a guess about them.
     if (RETRY_CONTEXT.test(text) && TIME_SPAN.test(text)) {
@@ -133,16 +139,40 @@ const PRODUCT_GUIDE: Record<TemplateProduct, { problem: string; angles: string; 
   },
 };
 
-function systemPrompt(product: TemplateProduct): string {
+// FIRM campaigns write to a service firm about its CLIENTS' problem.
+const FIRM_GUIDE: Record<TemplateProduct, { problem: string; angles: string; facts: string }> = {
+  REVENUE: {
+    problem: "billing in their clients' Stripe accounts drifting from what the client agreed with its customers",
+    angles:
+      "a client still billing customers on a price it retired; discounts that outlived the deal they were agreed for; subscriptions that stopped invoicing without anyone deciding so; failed renewals nobody followed up; revenue at month-end close that doesn't tie back to what was sold",
+    facts: PRODUCT_GUIDE.REVENUE.facts,
+  },
+  TRUST: {
+    problem: "answering security questionnaires and keeping audit evidence current for several clients at once",
+    angles:
+      "the same questionnaire questions answered again for each client in a different spreadsheet; a client's evidence going stale between audits; security reviews adding a section on AI; a client's deal waiting on a questionnaire",
+    facts: PRODUCT_GUIDE.TRUST.facts,
+  },
+};
+
+function systemPrompt(product: TemplateProduct, audience: TemplateAudience, audienceProfile: string | null): string {
   const profile = PRODUCTS[product];
-  const g = PRODUCT_GUIDE[product];
+  const firm = audience === "FIRM";
+  const g = firm ? FIRM_GUIDE[product] : PRODUCT_GUIDE[product];
+  const who = firm
+    ? `The recipient runs a service firm that looks after this for many client companies; they are not the end user. Write about their clients, never as if the firm itself had the problem.${audienceProfile ? `\nAudience: ${audienceProfile}` : ""}\n\n`
+    : "";
+  const whyTarget = firm
+    ? `a specific fact about THIS firm from the input (the services it offers or the clients it serves) to why ${g.problem} is likely among its clients`
+    : `a specific fact about THIS company from the input to why ${g.problem} is likely for them`;
+  const angleTarget = firm ? "fits the clients this firm serves" : "fits how this company bills or sells";
   return `You write two short sentences that get inserted into a fixed cold email from Ashish, founder of ${profile.name}.
 
 ${profile.name}: ${profile.oneLiner}
 
-whyLine (goes in email 1, right after Ashish has introduced himself and the product): ONE sentence, at most 30 words, that ties a specific fact about THIS company from the input to why ${g.problem} is likely for them. It must read naturally as the next sentence. Do not greet, do not introduce the product or Ashish, do not ask a question.
+${who}whyLine (goes in email 1, right after Ashish has introduced himself and the product): ONE sentence, at most 30 words, that ties ${whyTarget}. It must read naturally as the next sentence. Do not greet, do not introduce the product or Ashish, do not ask a question.
 
-angleLine (opens email 3): one or two sentences, at most 40 words, about ONE specific problem that fits how this company bills or sells, different from whyLine. Choose from: ${g.angles}. Not a question.
+angleLine (opens email 3): one or two sentences, at most 40 words, about ONE specific problem that ${angleTarget}, different from whyLine. Choose from: ${g.angles}. Not a question.
 
 Hard rules:
 - Use only facts present in the input. Never invent customers, tools, markets or certifications.
@@ -159,10 +189,9 @@ Respond with JSON only: {"whyLine": "...", "angleLine": "..."}`;
 }
 
 async function writeLines(
-  product: TemplateProduct,
+  system: string,
   userPrompt: string,
 ): Promise<{ lines: GeneratedLines; model: string }> {
-  const system = systemPrompt(product);
   if (await haikuAvailable()) {
     const { text } = await callHaiku({ system, user: userPrompt, schema: LINES_SCHEMA, maxTokens: 400, purpose: "cold-email-lines" });
     return { lines: JSON.parse(text) as GeneratedLines, model: HAIKU_MODEL };
@@ -197,6 +226,8 @@ export async function generateEmailSequence(input: {
     throw new Error(`No cold email template for product ${campaign.product}`);
   }
   const product: TemplateProduct = campaign.product;
+  const audience: TemplateAudience = campaign.audience;
+  const system = systemPrompt(product, audience, campaign.customIcpProfile);
   const companyName = outreach.company?.name ?? outreach.company?.domain ?? "your team";
 
   const inputData = {
@@ -224,10 +255,11 @@ export async function generateEmailSequence(input: {
       const feedback = problems.length
         ? `\n\nYour previous lines broke these rules — rewrite both:\n- ${problems.join("\n- ")}`
         : "";
-      const out = await writeLines(product, userPrompt + feedback);
+      const out = await writeLines(system, userPrompt + feedback);
       problems = lintLines(out.lines, {
         techNames: outreach.company?.detectedTechs ?? [],
         allowedTech: product === "REVENUE" ? ["Stripe"] : [],
+        companyName,
       });
       if (problems.length === 0) {
         lines = out.lines;
@@ -238,7 +270,7 @@ export async function generateEmailSequence(input: {
     }
   }
   if (!lines) {
-    const fb = FALLBACK_LINES[product];
+    const fb = (audience === "FIRM" ? FIRM_FALLBACK_LINES : FALLBACK_LINES)[product];
     lines = { whyLine: fb.whyLine(companyName), angleLine: fb.angleLine };
   }
 
@@ -246,6 +278,7 @@ export async function generateEmailSequence(input: {
   // messages (stepNumber cleared) count too — they still read them.
   const previouslyContacted =
     product === "TRUST" &&
+    audience === "DIRECT" &&
     (await prisma.emailMessage.count({
       where: {
         direction: "OUTBOUND",
@@ -255,7 +288,7 @@ export async function generateEmailSequence(input: {
       },
     })) > 0;
 
-  const steps = buildSequence(product, {
+  const steps = (audience === "FIRM" ? buildFirmSequence : buildSequence)(product, {
     previouslyContacted,
     firstName: contact.firstName,
     company: companyName,

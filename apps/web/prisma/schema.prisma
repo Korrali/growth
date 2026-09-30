@@ -126,6 +126,16 @@ enum ClientStatus {
   CHURNED
 }
 
+// Who a campaign writes to. DIRECT = the company that would use the product
+// (the product's own ICP and cold template). FIRM = service firms that run the
+// problem for many clients (fractional CFOs, vCISOs): its own template, its
+// audience in Campaign.customIcpProfile, and it is never auto-enrolled into —
+// its list is hand-picked and imported with import-apollo.ts --campaign.
+enum CampaignAudience {
+  DIRECT
+  FIRM
+}
+
 enum CampaignStatus {
   DRAFT
   ACTIVE
@@ -344,7 +354,8 @@ model Campaign {
   replyForwardTo    String?         // client's inbox for INTERESTED forwarding; null = founder inbox
   fromName          String?         // overrides GROWTH_FROM_NAME env var
   fromEmail         String?         // overrides GROWTH_FROM_EMAIL env var
-  customIcpProfile  String?         @db.Text  // replaces products.ts ICP in email generator context
+  customIcpProfile  String?         @db.Text  // who the campaign writes to; fed to the email writer for FIRM campaigns
+  audience          CampaignAudience @default(DIRECT)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   sequenceSteps     SequenceStep[]

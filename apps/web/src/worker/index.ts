@@ -283,6 +283,8 @@ async function main() {
         nextSendAt: { lte: new Date() },
       },
       select: { id: true, currentStep: true },
+      // Oldest first, so a list imported in priority order sends in that order.
+      orderBy: { nextSendAt: "asc" },
       take: 100,
     });
 

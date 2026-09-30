@@ -24,6 +24,8 @@ export interface ProductProfile {
   seoCta: string;
   /** The one next step an interested reply is given (reply-classifier drafts). */
   replyCta?: string;
+  /** replyCta for FIRM campaigns (service firms, see templates.ts buildFirmSequence). */
+  firmReplyCta?: string;
   /** The concrete offer every cold step builds toward (email-generator). */
   outboundOffer?: { offer: string; link: string };
   /**
@@ -92,6 +94,8 @@ ALWAYS REJECT (score 1–3) regardless of other signals — these companies are 
     },
     replyCta:
       "Start the 14-day trial at https://trust.korrali.com (card required, cancel in a click) and connect one system to see their SOC 2 gaps; if they have a questionnaire due, offer to complete it for them within two days. Mention pricing ($3,000/yr up to 50 people, everything included) only if they ask, and offer a 15-minute walkthrough.",
+    firmReplyCta:
+      "A 20-minute call: ask which days and times suit them this week or next. If they would rather see it first, offer to take one security questionnaire a client of theirs is working on, with that client's sign-off, and send back draft answers within two days with every answer the client must confirm flagged. Do not mention prices.",
     topicSourcing: "community",
   },
 
@@ -154,6 +158,10 @@ ALWAYS REJECT — these are competitors or non-buyers for Revenue:
     },
     replyCta:
       "Install Korrali Revenue free from the Stripe App Marketplace (https://marketplace.stripe.com/apps/korrali-revenue-recovery) — it starts flagging as soon as it is connected, detection stays free with no card, and they can uninstall if it finds nothing. Offer to walk through the findings with them once it has run.",
+    // Firms get a conversation, never the self-serve price or install link:
+    // a firm that sees a single-company price anchors on it.
+    firmReplyCta:
+      "A 20-minute call: ask which days and times suit them this week or next. If they would rather see it first, offer to run Korrali Revenue free on one of their clients' Stripe accounts, with that client's sign-off, and walk them through the findings. Do not mention prices or send an install link.",
     topicSourcing: "community",
   },
 

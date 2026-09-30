@@ -63,11 +63,13 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
-function productContext(product: string | undefined): string {
+function productContext(product: string | undefined, audience?: string): string {
   const profile = product ? PRODUCTS[product as MarketedProduct] : undefined;
   if (!profile) return "";
   const lines = [`Product context: ${profile.name} — ${profile.oneLiner}`];
-  if (profile.replyCta) lines.push(`Next step to offer: ${profile.replyCta}`);
+  const cta = audience === "FIRM" ? profile.firmReplyCta ?? profile.replyCta : profile.replyCta;
+  if (audience === "FIRM") lines.push("The sender wrote to this person as a service firm (fractional CFO, vCISO or similar) that looks after many client companies, asking how they handle this for clients today.");
+  if (cta) lines.push(`Next step to offer: ${cta}`);
   return `${lines.join("\n")}\n\n---\n\n`;
 }
 
@@ -87,7 +89,7 @@ export async function classifyReply(messageId: string) {
     messages: [
       {
         role: "user",
-        content: `${productContext(message.outreach?.campaign.product)}Subject: ${message.subject ?? "(none)"}\n\nBody:\n${message.body}`,
+        content: `${productContext(message.outreach?.campaign.product, message.outreach?.campaign.audience)}Subject: ${message.subject ?? "(none)"}\n\nBody:\n${message.body}`,
       },
     ],
     output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },

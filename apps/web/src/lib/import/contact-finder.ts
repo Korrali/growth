@@ -288,7 +288,7 @@ async function autoEnqueueOutreach(
   if (!PRODUCTS[product]?.outboundViable) return false;
 
   const campaign = await prisma.campaign.findFirst({
-    where: { product, status: "ACTIVE" },
+    where: { product, status: "ACTIVE", audience: "DIRECT" },
     orderBy: { createdAt: "asc" }, // oldest = most established campaign
   });
 
