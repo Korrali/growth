@@ -4,7 +4,8 @@
  *
  * Setup (once):
  *   1. Extensions → Apps Script. Replace the code with this file. Save.
- *   2. Project Settings → Script properties → add SECRET = a long random string.
+ *   2. Set SECRET below to a long random string (or add it as a script
+ *      property named SECRET, which wins over the value here).
  *   3. Deploy → New deployment → type "Web app". Execute as: Me.
  *      Who has access: Anyone. Deploy, authorize, copy the web app URL.
  *   4. Put the URL and the secret in Growth's prod env as TRACKER_WEBHOOK_URL
@@ -17,6 +18,9 @@
  * one by hand (Call booked, Paying, ...), Growth leaves it alone. Rows you add
  * yourself (no Email, or another product) are never touched.
  */
+
+// Must equal Growth's TRACKER_WEBHOOK_SECRET.
+var SECRET = '';
 
 var HEADERS = [
   'Name', 'Company', 'Product', 'Type', 'Source', 'Connected?', 'Headline $', 'Status', 'Next step', 'Date',
@@ -31,7 +35,7 @@ function doPost(e) {
   var lock = LockService.getScriptLock();
   try {
     var body = JSON.parse(e.postData.contents);
-    var secret = PropertiesService.getScriptProperties().getProperty('SECRET');
+    var secret = PropertiesService.getScriptProperties().getProperty('SECRET') || SECRET;
     if (!secret || body.secret !== secret) return reply({ ok: false, error: 'bad secret' });
     lock.waitLock(30000);
     return reply(upsert(body.rows || []));
