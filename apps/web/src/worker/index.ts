@@ -19,6 +19,7 @@ import { processVisitor } from "@/lib/visitor/processor";
 import { runAutoEnroll } from "@/lib/enroll/auto-enroll";
 import { pollInbox } from "@/lib/mail/inbox-poller";
 import { sendDailyDigest } from "@/lib/digest/daily-digest";
+import { syncTracker } from "@/lib/tracker/sheet-sync";
 import { SEO_TOPIC_CACHE_SLUG } from "@/lib/content-slugs";
 import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -57,7 +58,7 @@ async function main() {
     "community-scan-trigger", "seo-topic-refresh", QUEUE_NAMES.COMMUNITY_SCAN,
     QUEUE_NAMES.LINKEDIN_DRAFT, QUEUE_NAMES.VISITOR_PROCESS,
     "seo-auto-publish", "auto-enroll-check",
-    "inbox-poll", "daily-digest",
+    "inbox-poll", "daily-digest", "tracker-sync",
   ];
   for (const q of allQueues) {
     await boss.createQueue(q);
@@ -553,6 +554,14 @@ async function main() {
     }
   });
 
+  // The founder's distribution tracker (Google Sheet): sends and replies.
+  // No-op without TRACKER_WEBHOOK_*.
+  await boss.work("tracker-sync", async ([job]) => {
+    if (!job) return;
+    const result = await syncTracker();
+    if (!result.skipped) console.log(`[cron] tracker-sync: rows=${result.rows} updated=${result.updated} appended=${result.appended}`);
+  });
+
   // Founder's morning sheet.
   await boss.work("daily-digest", async ([job]) => {
     if (!job) return;
@@ -562,6 +571,7 @@ async function main() {
 
   await boss.schedule("outreach-due-check",       "*/15 * * * *");
   await boss.schedule("inbox-poll",               "*/5 * * * *");
+  await boss.schedule("tracker-sync",             "*/15 * * * *");  // after sends (15-min cadence) and replies (5-min poll)
   await boss.schedule("daily-digest",             "30 2 * * *");    // 02:30 UTC = 08:00 IST, after the US send day closes
   await boss.schedule("weekly-insights-trigger",  "0 6 * * 1");
   await boss.schedule("trial-daily-check",        "0 7 * * *");
