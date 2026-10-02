@@ -24,12 +24,12 @@ var SECRET = '';
 
 var HEADERS = [
   'Name', 'Company', 'Product', 'Type', 'Source', 'Connected?', 'Headline $', 'Status', 'Next step', 'Date',
-  'Email', 'Emails sent', 'Reply type', 'Last reply', 'Growth status', 'Growth next step',
+  'Email', 'LinkedIn', 'Emails sent', 'Reply type', 'Last reply', 'Growth status', 'Growth next step',
 ];
 // Growth always overwrites these.
 var FACTS = ['Emails sent', 'Reply type', 'Last reply'];
 // Growth fills these only when empty, so your corrections stick.
-var FILL_ONLY = ['Name', 'Company', 'Product', 'Type', 'Source', 'Email'];
+var FILL_ONLY = ['Name', 'Company', 'Product', 'Type', 'Source', 'Email', 'LinkedIn'];
 
 function doPost(e) {
   var lock = LockService.getScriptLock();

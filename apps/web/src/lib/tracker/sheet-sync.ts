@@ -22,6 +22,7 @@ export interface TrackerRow {
   "Next step": string;
   Date: string;
   Email: string;
+  LinkedIn: string;
   "Emails sent": number;
   "Reply type": string;
   "Last reply": string;
@@ -35,7 +36,7 @@ export interface OutreachForTracker {
   stoppedReason: string | null;
   updatedAt: Date;
   product: string;
-  contact: { email: string; firstName: string | null; lastName: string | null };
+  contact: { email: string; firstName: string | null; lastName: string | null; linkedinUrl?: string | null };
   companyName: string | null;
   messages: {
     direction: "OUTBOUND" | "INBOUND";
@@ -108,6 +109,7 @@ export function toTrackerRow(o: OutreachForTracker, now = new Date()): TrackerRo
     "Next step": next,
     Date: day(last),
     Email: o.contact.email,
+    LinkedIn: o.contact.linkedinUrl ?? "",
     "Emails sent": sent.length,
     "Reply type": category ? category.toLowerCase().replace(/_/g, " ") : reply ? "unclassified" : "",
     "Last reply": reply ? reply.body.replace(/\s+/g, " ").trim().slice(0, SNIPPET_CHARS) : "",
@@ -127,7 +129,7 @@ export async function buildTrackerRows(now = new Date()): Promise<TrackerRow[]> 
       stoppedReason: true,
       updatedAt: true,
       campaign: { select: { product: true } },
-      contact: { select: { email: true, firstName: true, lastName: true } },
+      contact: { select: { email: true, firstName: true, lastName: true, linkedinUrl: true } },
       company: { select: { name: true } },
       emailMessages: {
         orderBy: { createdAt: "asc" },
