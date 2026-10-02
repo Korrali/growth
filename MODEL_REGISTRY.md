@@ -49,7 +49,13 @@ sentences per prospect (`src/lib/ai/email-generator.ts`). Those two sentences us
 **Claude `claude-haiku-4-5`** while the week's spend is under `HAIKU_WEEKLY_BUDGET_USD`
 (default **$1/week**, ISO week from Monday 00:00 UTC, tracked as AuditLog `ai.spend` rows —
 `src/lib/ai/haiku.ts`). At the cap, and without `ANTHROPIC_API_KEY`, they use the free chain
-above. Lines failing the checks twice are replaced by fixed fallback lines. Drafts are
+above.
+
+**Backup (2026-10-02, founder-approved):** if the Haiku call fails (no Anthropic credit,
+outage) or Haiku's cap is reached, the lines use OpenAI **`gpt-5-mini`**
+(`OPENAI_BACKUP_MODEL` overrides) under its own cap `OPENAI_WEEKLY_BUDGET_USD` (default
+**$1/week**), so at most $2/week in total. If that fails too, the free chain writes them. A
+paid failure never fails the draft. Lines failing the checks twice are replaced by fixed fallback lines. Drafts are
 written just before sending, so the budget only pays for emails that go out
 (~$0.002 per prospect). A 2026-09-25 benchmark on the production prompt: Groq reproduced
 banned filler in every cold-email run; Haiku followed the rules far more often. Every other

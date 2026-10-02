@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { anthropic } from "@/lib/ai/claude";
 import { WRITING_MODEL } from "@/lib/ai/models";
 import { PRODUCTS } from "@/lib/products";
-import { HAIKU_MODEL, callHaiku, haikuAvailable } from "@/lib/ai/haiku";
+import { HAIKU_MODEL, callHaiku, callOpenAIBackup, haikuAvailable, openaiBackupAvailable, openaiBackupModel } from "@/lib/ai/haiku";
 import {
   buildFirmSequence,
   buildSequence,
@@ -21,7 +21,8 @@ import {
 // lowercase subjects, no greeting, no "who I am", and banned filler.
 //
 // Writer: Claude Haiku while this week's spend is under the cap (haiku.ts,
-// $1/week), else the free chain. Lines are linted; a failing pair is sent
+// $1/week); OpenAI's small model (its own $1/week cap) if Haiku fails or is
+// capped; else the free chain. Lines are linted; a failing pair is sent
 // back once with the problems listed, then replaced by safe fallback lines —
 // a prospect is never stuck waiting on a draft.
 
@@ -193,9 +194,24 @@ async function writeLines(
   system: string,
   userPrompt: string,
 ): Promise<{ lines: GeneratedLines; model: string }> {
+  const args = { system, user: userPrompt, schema: LINES_SCHEMA, maxTokens: 400, purpose: "cold-email-lines" };
+  // A paid failure must never fail the draft: a prospect whose draft keeps
+  // failing gets stopped by the sender. Fall through to the next writer.
   if (await haikuAvailable()) {
-    const { text } = await callHaiku({ system, user: userPrompt, schema: LINES_SCHEMA, maxTokens: 400, purpose: "cold-email-lines" });
-    return { lines: JSON.parse(text) as GeneratedLines, model: HAIKU_MODEL };
+    try {
+      const { text } = await callHaiku(args);
+      return { lines: JSON.parse(text) as GeneratedLines, model: HAIKU_MODEL };
+    } catch (err) {
+      console.warn(`[email-generator] Haiku failed, trying OpenAI backup: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  if (await openaiBackupAvailable()) {
+    try {
+      const { text } = await callOpenAIBackup(args);
+      return { lines: JSON.parse(text) as GeneratedLines, model: openaiBackupModel() };
+    } catch (err) {
+      console.warn(`[email-generator] OpenAI backup failed, using the free chain: ${err instanceof Error ? err.message : err}`);
+    }
   }
   const response = await anthropic.messages.create({
     model: WRITING_MODEL,

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mail/transport";
 import { globalDailyCap } from "@/lib/sending/send-budget";
-import { spentThisWeekUsd, weeklyBudgetUsd } from "@/lib/ai/haiku";
+import { openaiWeeklyBudgetUsd, spentThisWeekUsd, weeklyBudgetUsd } from "@/lib/ai/haiku";
 
 // The founder's morning sheet. One email, same shape every day: what went
 // out, who wrote back, what needs a human today, and anything broken. The
@@ -169,7 +169,7 @@ export async function collectDigest(now = new Date()): Promise<DigestData> {
     awaitingResearch,
     emailed,
     dailyCap: await globalDailyCap(now),
-    aiSpend: { usd: await spentThisWeekUsd(now), cap: weeklyBudgetUsd() },
+    aiSpend: { usd: await spentThisWeekUsd(now), cap: weeklyBudgetUsd() + openaiWeeklyBudgetUsd() },
     activeCampaigns: campaigns.map((c) => c.name),
     emergencyStop: settings?.globalEmergencyStop ?? true,
     totals: { sent: totalsSent, replied: totalsReplied, interested: totalsInterested },
