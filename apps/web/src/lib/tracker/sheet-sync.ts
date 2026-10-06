@@ -36,6 +36,8 @@ export interface OutreachForTracker {
   stoppedReason: string | null;
   updatedAt: Date;
   product: string;
+  /** Campaign audience; AUDITOR rows are audit firms offered a partner listing, not buyers. */
+  audience?: string;
   contact: { email: string; firstName: string | null; lastName: string | null; linkedinUrl?: string | null };
   companyName: string | null;
   messages: {
@@ -64,6 +66,7 @@ export function toTrackerRow(o: OutreachForTracker, now = new Date()): TrackerRo
   );
   const reply = replies.at(-1);
   const category = reply?.classification?.category;
+  const partner = o.audience === "AUDITOR";
 
   let status: string;
   let next: string;
@@ -80,7 +83,7 @@ export function toTrackerRow(o: OutreachForTracker, now = new Date()): TrackerRo
     else if (category === "INTERESTED") {
       if (c.autoSentAt) next = `Interested. Reply sent ${day(c.autoSentAt)}; book the call.`;
       else if (c.autoSendAt && !c.autoSendCancelledAt && c.autoSendAt > now) next = `Interested. Drafted reply sends ${day(c.autoSendAt)} unless you cancel it in Growth.`;
-      else next = "Interested. Reply and book the call.";
+      else next = partner ? "Interested. Reply with the partnership details." : "Interested. Reply and book the call.";
     } else if (category === "NOT_NOW") next = "Not now. Follow up later.";
     else if (category === "WRONG_PERSON") next = "Wrong person. Find the right contact.";
     else if (category === "OBJECTION") next = "Answer their objection.";
@@ -103,8 +106,8 @@ export function toTrackerRow(o: OutreachForTracker, now = new Date()): TrackerRo
     Name: [o.contact.firstName, o.contact.lastName].filter(Boolean).join(" "),
     Company: o.companyName ?? "",
     Product: PRODUCTS[o.product as keyof typeof PRODUCTS] ?? o.product,
-    Type: "buyer",
-    Source: "Growth cold email",
+    Type: partner ? "CPA" : "buyer",
+    Source: partner ? "Growth partner email" : "Growth cold email",
     Status: status,
     "Next step": next,
     Date: day(last),
@@ -128,7 +131,7 @@ export async function buildTrackerRows(now = new Date()): Promise<TrackerRow[]> 
       nextSendAt: true,
       stoppedReason: true,
       updatedAt: true,
-      campaign: { select: { product: true } },
+      campaign: { select: { product: true, audience: true } },
       contact: { select: { email: true, firstName: true, lastName: true, linkedinUrl: true } },
       company: { select: { name: true } },
       emailMessages: {
@@ -166,6 +169,7 @@ export async function buildTrackerRows(now = new Date()): Promise<TrackerRow[]> 
       stoppedReason: o.stoppedReason,
       updatedAt: o.updatedAt,
       product: o.campaign.product,
+      audience: o.campaign.audience,
       contact: o.contact,
       companyName: o.company?.name ?? prev?.companyName ?? null,
       messages: [...(prev?.messages ?? []), ...messages].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),

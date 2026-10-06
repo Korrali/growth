@@ -31,6 +31,11 @@ function outreach(overrides: Partial<Outreach> = {}): Outreach {
 }
 
 describe("toTrackerRow", () => {
+  it("lists an audit firm as a CPA partner, not a buyer", () => {
+    const row = toTrackerRow(outreach({ product: "TRUST", audience: "AUDITOR", companyName: "Sage Audits" }), NOW);
+    expect(row).toMatchObject({ Company: "Sage Audits", Product: "Trust", Type: "CPA", Source: "Growth partner email", Status: "Contacted" });
+  });
+
   it("fills the tracker's columns for a prospect who was emailed", () => {
     expect(toTrackerRow(outreach(), NOW)).toEqual({
       Name: "Dana Lee",

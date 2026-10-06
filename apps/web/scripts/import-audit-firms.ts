@@ -9,7 +9,9 @@
  * Creates (or reuses) the campaign "Trust: audit firm partners" — status
  * DRAFT, two steps (the offer, then one follow-up 5 days later) — and enrolls
  * every firm into it. Batch 1 is due at once; batch 2 is due at --batch2-at.
- * Firms already in Growth (by domain or email) are skipped, never re-enrolled.
+ * A firm Growth has already written to (a contact on its domain, or the same
+ * email) is skipped, never re-enrolled. A company row with no contacts — one
+ * the discovery pipeline found and scored as not a product buyer — is reused.
  * Nothing sends until the campaign is set ACTIVE. Safe to re-run.
  *
  * --weight is the campaign's dailyLimit: its share of the day's send cap
@@ -57,19 +59,25 @@ async function main() {
   console.log(`batch 2 due: ${batch2At.toISOString()}`);
   for (const s of skipped) console.log(`  skipped row ${s.row} ${s.firm}: ${s.reason}`);
 
-  // Already in Growth: a firm we have written to (or scored) before is left alone.
+  // Already in Growth: a firm with a contact on file is left alone.
   const known: string[] = [];
+  const reused: string[] = [];
   const fresh = [];
   for (const lead of leads) {
     const [company, contact] = await Promise.all([
-      prisma.company.findUnique({ where: { domain: lead.domain }, select: { id: true } }),
+      prisma.company.findUnique({ where: { domain: lead.domain }, select: { id: true, _count: { select: { contacts: true } } } }),
       prisma.contact.findUnique({ where: { email: lead.email }, select: { id: true } }),
     ]);
-    if (company || contact) known.push(`${lead.firm} (${lead.email})`);
-    else fresh.push(lead);
+    if (contact || (company && company._count.contacts > 0)) {
+      known.push(`${lead.firm} (${lead.email})`);
+      continue;
+    }
+    if (company) reused.push(lead.firm);
+    fresh.push(lead);
   }
   console.log(`to enrol: ${fresh.length}`);
-  if (known.length) console.log(`already in Growth, skipped: ${known.join("; ")}`);
+  if (reused.length) console.log(`company row already in Growth with no contacts, reused: ${reused.join("; ")}`);
+  if (known.length) console.log(`already contacted through Growth, skipped: ${known.join("; ")}`);
 
   if (dryRun) {
     for (const l of fresh) console.log(`  [batch ${l.batch}] ${l.firm} · ${l.email} · ${l.firstName ?? "(no name)"} · ${l.country ?? ""}`);
@@ -120,19 +128,18 @@ async function main() {
   const now = Date.now();
   let enrolled = 0;
   for (const lead of fresh) {
-    const company = await prisma.company.create({
-      data: {
-        name: lead.firm,
-        domain: lead.domain,
-        website: `https://${lead.domain}`,
-        industry: "Audit firm",
-        acquisitionSource: source,
-        fitProduct: "TRUST",
-        // Not AI-scored: the send gate needs >= 6 and the product ICP rejects service firms.
-        fitScore: 7,
-        fitScoredAt: new Date(),
-        fitReasoning: `Hand-picked audit firm for AUDITOR campaign "${CAMPAIGN_NAME}" (${source}); not AI-scored.`,
-      },
+    // Not AI-scored: the send gate needs >= 6 and the product ICP rejects service firms.
+    const fit = {
+      name: lead.firm,
+      fitProduct: "TRUST" as const,
+      fitScore: 7,
+      fitScoredAt: new Date(),
+      fitReasoning: `Hand-picked audit firm for AUDITOR campaign "${CAMPAIGN_NAME}" (${source}); not AI-scored.`,
+    };
+    const company = await prisma.company.upsert({
+      where: { domain: lead.domain },
+      create: { ...fit, domain: lead.domain, website: `https://${lead.domain}`, industry: "Audit firm", acquisitionSource: source },
+      update: fit,
     });
     const contact = await prisma.contact.create({
       data: {

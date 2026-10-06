@@ -3,10 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const mockPrisma = {
   emailMessage: { findFirst: vi.fn(), count: vi.fn() },
   campaign: { findMany: vi.fn() },
+  outreach: { count: vi.fn() },
 };
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 
-const { warmupCap, campaignShare, checkSendBudget } = await import("@/lib/sending/send-budget");
+const { warmupCap, campaignShare, checkSendBudget, globalDailyCap } = await import("@/lib/sending/send-budget");
 
 const NOW = new Date("2026-10-15T15:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000);
@@ -69,5 +70,44 @@ describe("checkSendBudget", () => {
       allowed: false,
       reason: "daily_limit_reached:total:40/40",
     });
+  });
+});
+
+describe("one-off day totals and audit-firm batches", () => {
+  const BATCH_DAY = new Date("2026-10-06T15:00:00Z");
+  const withAuditor = [
+    { id: "rev", dailyLimit: 60, audience: "DIRECT" },
+    { id: "trust", dailyLimit: 40, audience: "DIRECT" },
+    { id: "revFirm", dailyLimit: 60, audience: "FIRM" },
+    { id: "trustFirm", dailyLimit: 40, audience: "FIRM" },
+    { id: "cpa", dailyLimit: 100, audience: "AUDITOR" },
+  ];
+
+  it("raises the total to 60 on the two batch days only", async () => {
+    mockPrisma.emailMessage.findFirst.mockResolvedValue({ sentAt: new Date("2026-09-25T08:00:00Z") });
+    expect(await globalDailyCap(BATCH_DAY)).toBe(60);
+    expect(await globalDailyCap(new Date("2026-10-13T15:00:00Z"))).toBe(60);
+    expect(await globalDailyCap(new Date("2026-10-07T15:00:00Z"))).toBe(40);
+  });
+
+  it("gives the audit-firm batch 20 of the 60 and leaves the others their 40", async () => {
+    mockPrisma.campaign.findMany.mockResolvedValue(withAuditor);
+    mockPrisma.emailMessage.findFirst.mockResolvedValue({ sentAt: new Date("2026-09-25T08:00:00Z") });
+    mockPrisma.outreach.count.mockResolvedValue(20);
+    mockPrisma.emailMessage.count.mockResolvedValueOnce(20).mockResolvedValueOnce(20);
+    expect(await checkSendBudget("cpa", BATCH_DAY)).toEqual({ allowed: false, reason: "daily_limit_reached:campaign:20/20" });
+    mockPrisma.emailMessage.count.mockResolvedValueOnce(20).mockResolvedValueOnce(12);
+    expect(await checkSendBudget("rev", BATCH_DAY)).toEqual({ allowed: false, reason: "daily_limit_reached:campaign:12/12" });
+  });
+
+  it("gives an idle audit-firm campaign no share", async () => {
+    mockPrisma.campaign.findMany.mockResolvedValue(withAuditor);
+    mockPrisma.emailMessage.findFirst.mockResolvedValue({ sentAt: new Date("2026-09-25T08:00:00Z") });
+    mockPrisma.outreach.count.mockResolvedValue(0);
+    // 7 Oct: total 40, Revenue's share is 40 * 60/200 = 12, as if the campaign weren't there.
+    mockPrisma.emailMessage.count.mockResolvedValueOnce(11).mockResolvedValueOnce(11);
+    expect(await checkSendBudget("rev", new Date("2026-10-07T15:00:00Z"))).toEqual({ allowed: true });
+    mockPrisma.emailMessage.count.mockResolvedValueOnce(12).mockResolvedValueOnce(12);
+    expect(await checkSendBudget("rev", new Date("2026-10-07T15:00:00Z"))).toEqual({ allowed: false, reason: "daily_limit_reached:campaign:12/12" });
   });
 });

@@ -15,6 +15,20 @@ import { prisma } from "@/lib/db";
 // Only cold sequence steps count (stepNumber set). Auto-replies to interested
 // prospects and founder alerts never use the budget.
 
+// One-off totals the founder set for single days (server-local date; prod runs
+// in UTC), above the warm-up schedule: 60 on the two days the audit-firm
+// batches go out, so those 20 emails don't come out of Revenue's and Trust's
+// share. A day not listed follows the schedule.
+export const CAP_OVERRIDES: Record<string, number> = {
+  "2026-10-06": 60,
+  "2026-10-13": 60,
+};
+
+function dayKey(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export const WARMUP_START = 30;
 export const WARMUP_STEP = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -49,7 +63,23 @@ export async function globalDailyCap(now = new Date()): Promise<number> {
     orderBy: { sentAt: "asc" },
     select: { sentAt: true },
   });
-  return warmupCap(first?.sentAt ?? null, now);
+  return Math.max(warmupCap(first?.sentAt ?? null, now), CAP_OVERRIDES[dayKey(now)] ?? 0);
+}
+
+/** Has this campaign anything to send today, or sent anything already? */
+async function hasWorkToday(campaignId: string, now: Date): Promise<boolean> {
+  const since = todayStart(now);
+  const tomorrow = new Date(since.getTime() + DAY_MS);
+  const n = await prisma.outreach.count({
+    where: {
+      campaignId,
+      OR: [
+        { status: { in: ["PENDING", "ACTIVE"] }, nextSendAt: { lt: tomorrow } },
+        { emailMessages: { some: { direction: "OUTBOUND", stepNumber: { not: null }, sentAt: { gte: since } } } },
+      ],
+    },
+  });
+  return n > 0;
 }
 
 export interface BudgetCheck {
@@ -59,11 +89,11 @@ export interface BudgetCheck {
 
 export async function checkSendBudget(campaignId: string, now = new Date()): Promise<BudgetCheck> {
   const since = todayStart(now);
-  const [cap, campaigns, sentTotal, sentCampaign] = await Promise.all([
+  const [cap, activeCampaigns, sentTotal, sentCampaign] = await Promise.all([
     globalDailyCap(now),
     prisma.campaign.findMany({
       where: { status: "ACTIVE", clientId: null },
-      select: { id: true, dailyLimit: true },
+      select: { id: true, dailyLimit: true, audience: true },
     }),
     prisma.emailMessage.count({
       where: { direction: "OUTBOUND", stepNumber: { not: null }, sentAt: { gte: since } },
@@ -79,6 +109,14 @@ export async function checkSendBudget(campaignId: string, now = new Date()): Pro
   ]);
 
   if (sentTotal >= cap) return { allowed: false, reason: `daily_limit_reached:total:${sentTotal}/${cap}` };
+
+  // An AUDITOR campaign sends in dated batches and is idle in between. On a day
+  // it has nothing to send it takes no share, so its weight holds nobody back.
+  const campaigns = [];
+  for (const c of activeCampaigns) {
+    if (c.audience === "AUDITOR" && c.id !== campaignId && !(await hasWorkToday(c.id, now))) continue;
+    campaigns.push(c);
+  }
 
   const totalWeight = campaigns.reduce((sum, c) => sum + c.dailyLimit, 0);
   const weight = campaigns.find((c) => c.id === campaignId)?.dailyLimit ?? 0;
