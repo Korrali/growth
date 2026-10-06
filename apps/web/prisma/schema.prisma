@@ -134,6 +134,7 @@ enum ClientStatus {
 enum CampaignAudience {
   DIRECT
   FIRM
+  AUDITOR // audit firms offered a partner listing (templates.ts buildAuditFirmSequence)
 }
 
 enum CampaignStatus {

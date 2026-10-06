@@ -4,6 +4,7 @@ import { WRITING_MODEL } from "@/lib/ai/models";
 import { PRODUCTS } from "@/lib/products";
 import { HAIKU_MODEL, callHaiku, callOpenAIBackup, haikuAvailable, openaiBackupAvailable, openaiBackupModel } from "@/lib/ai/haiku";
 import {
+  buildAuditFirmSequence,
   buildFirmSequence,
   buildSequence,
   FALLBACK_LINES,
@@ -244,6 +245,9 @@ export async function generateEmailSequence(input: {
   }
   const product: TemplateProduct = campaign.product;
   const audience: TemplateAudience = campaign.audience;
+  // Audit-firm partnership emails are fixed text: no AI sentence to write.
+  const auditor = audience === "AUDITOR";
+  if (auditor && product !== "TRUST") throw new Error("AUDITOR campaigns are Trust only");
   const system = systemPrompt(product, audience, campaign.customIcpProfile);
   const fullName = outreach.company?.name ?? outreach.company?.domain ?? "your team";
   const companyName = audience === "FIRM" ? shortFirmName(fullName) : fullName;
@@ -268,6 +272,10 @@ export async function generateEmailSequence(input: {
   let error: string | null = null;
   const userPrompt = `Write whyLine and angleLine for this prospect:\n${JSON.stringify(inputData, null, 2)}`;
 
+  if (auditor) {
+    lines = { whyLine: "", angleLine: "" };
+    model = "template";
+  }
   for (let attempt = 0; attempt < 2 && !lines; attempt++) {
     try {
       const feedback = problems.length
@@ -306,13 +314,15 @@ export async function generateEmailSequence(input: {
       },
     })) > 0;
 
-  const steps = (audience === "FIRM" ? buildFirmSequence : buildSequence)(product, {
-    previouslyContacted,
-    firstName: contact.firstName,
-    company: companyName,
-    whyLine: lines.whyLine,
-    angleLine: lines.angleLine,
-  });
+  const steps = auditor
+    ? buildAuditFirmSequence({ firstName: contact.firstName, company: companyName })
+    : (audience === "FIRM" ? buildFirmSequence : buildSequence)(product, {
+        previouslyContacted,
+        firstName: contact.firstName,
+        company: companyName,
+        whyLine: lines.whyLine,
+        angleLine: lines.angleLine,
+      });
 
   // The template is founder-approved, so every step passes the send gate
   // (eligibility.ts gate 13 reads these).

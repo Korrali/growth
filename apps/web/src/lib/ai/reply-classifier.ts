@@ -67,6 +67,12 @@ function productContext(product: string | undefined, audience?: string): string 
   const profile = product ? PRODUCTS[product as MarketedProduct] : undefined;
   if (!profile) return "";
   const lines = [`Product context: ${profile.name} — ${profile.oneLiner}`];
+  // An audit firm was offered a partner listing, not the product: there is no
+  // sign-up step to hand it, and the founder answers these himself.
+  if (audience === "AUDITOR") {
+    lines.push("The sender wrote to this audit firm (a CPA firm that issues SOC 2 reports) offering to list it as an audit partner, at no fee and with no cut of its audit fees. The firm is a potential partner, not a customer: never offer a trial, a price or a sign-up link.");
+    return `${lines.join("\n")}\n\n---\n\n`;
+  }
   const cta = audience === "FIRM" ? profile.firmReplyCta ?? profile.replyCta : profile.replyCta;
   if (audience === "FIRM") lines.push("The sender wrote to this person as a service firm (fractional CFO, vCISO or similar) that looks after many client companies, asking how they handle this for clients today.");
   if (cta) lines.push(`Next step to offer: ${cta}`);
@@ -105,7 +111,9 @@ export async function classifyReply(messageId: string) {
   };
 
   const isInterested = parsed.category === ReplyCategory.INTERESTED;
-  const autoSendAt = isInterested && parsed.founderDraft
+  // Never auto-reply to an audit firm: partnership terms are the founder's to write.
+  const autoSend = isInterested && message.outreach?.campaign.audience !== "AUDITOR";
+  const autoSendAt = autoSend && parsed.founderDraft
     ? new Date(Date.now() + AUTO_SEND_DELAY_HOURS * 60 * 60 * 1000)
     : null;
 
@@ -123,7 +131,7 @@ export async function classifyReply(messageId: string) {
       priority: parsed.priority,
       founderDraft: parsed.founderDraft,
       // Only set autoSendAt on re-classification if not already sent/cancelled
-      autoSendAt: isInterested && parsed.founderDraft ? autoSendAt : undefined,
+      autoSendAt: autoSend && parsed.founderDraft ? autoSendAt : undefined,
     },
   });
 
@@ -136,7 +144,7 @@ export async function classifyReply(messageId: string) {
       metadata: {
         category: parsed.category,
         priority: parsed.priority,
-        autoSendScheduled: isInterested,
+        autoSendScheduled: autoSend,
       },
     },
   });

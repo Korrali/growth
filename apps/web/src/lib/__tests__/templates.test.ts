@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildSequence, buildFirmSequence, tidySentence, FALLBACK_LINES, FIRM_FALLBACK_LINES, FIRM_TEMPLATE_REVISED_AT, isStaleDraft, shortFirmName, TEMPLATE_REVISED_AT } from "@/lib/sending/templates";
+import { AUDITOR_TEMPLATE_REVISED_AT, buildAuditFirmSequence, buildSequence, buildFirmSequence, tidySentence, FALLBACK_LINES, FIRM_FALLBACK_LINES, FIRM_TEMPLATE_REVISED_AT, isStaleDraft, shortFirmName, TEMPLATE_REVISED_AT } from "@/lib/sending/templates";
+import { parseAuditFirmsCsv } from "@/lib/import/audit-firms";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { lintLines } from "@/lib/ai/email-generator";
 import { timezoneForCountry } from "@/lib/sending/timezone";
 
@@ -199,5 +202,58 @@ describe("shortFirmName", () => {
     expect(shortFirmName("Resolute Consulting PLLC")).toBe("Resolute Consulting");
     expect(shortFirmName("BARR Advisory, P.A.")).toBe("BARR Advisory");
     expect(shortFirmName("Level10 CFO")).toBe("Level10 CFO");
+  });
+});
+
+describe("buildAuditFirmSequence", () => {
+  it("offers a partner listing with no cut of the firm's fees, and asks for a reply", () => {
+    const [s1, s2, ...rest] = buildAuditFirmSequence({ firstName: null, company: "Sage Audits" });
+    expect(rest).toEqual([]);
+    expect(s1!.subject).toBe("Audit partnership: Sage Audits and Korrali Trust");
+    expect(s1!.body.startsWith("Hi there,\n\nI'm Ashish, founder of Korrali Trust,")).toBe(true);
+    expect(s1!.body).toContain("I'd like to offer Sage Audits a partnership.");
+    expect(s1!.body).toContain("Korrali Trust takes no cut of your fees and charges you nothing.");
+    expect(s1!.body).toContain("You can see the product here: https://trust.korrali.com");
+    expect(s1!.body).toContain("just reply to this email");
+    expect(s1!.body.endsWith("Best,\nAshish Bhagat\nFounder, Korrali Trust\nKorrali LLC, a US company\ntrust.korrali.com")).toBe(true);
+    expect(s2!.subject).toBe(s1!.subject);
+    expect(s2!.body).toContain("no cut of your audit fees");
+  });
+
+  it("greets a named contact by first name", () => {
+    expect(buildAuditFirmSequence({ firstName: "Drew", company: "LBMC" })[0]!.body.startsWith("Hi Drew,")).toBe(true);
+  });
+
+  it("makes no compliance, price or audit-included claim", () => {
+    const text = buildAuditFirmSequence({ firstName: null, company: "LBMC" }).map((s) => s.body).join("\n");
+    expect(text).not.toMatch(/compliant|certified|guarantee|audit included|\$\d|trial/i);
+  });
+
+  it("dates its drafts on its own", () => {
+    expect(isStaleDraft("TRUST", new Date(AUDITOR_TEMPLATE_REVISED_AT.getTime() - 1000), "AUDITOR")).toBe(true);
+    expect(isStaleDraft("TRUST", new Date(AUDITOR_TEMPLATE_REVISED_AT.getTime() + 1000), "AUDITOR")).toBe(false);
+  });
+});
+
+describe("parseAuditFirmsCsv", () => {
+  it("reads the shipped list: 35 firms, 20 then 15, each batch a mix of sizes", () => {
+    const text = readFileSync(join(__dirname, "../../../scripts/data/audit-firms.csv"), "utf8");
+    const { leads, skipped } = parseAuditFirmsCsv(text);
+    expect(skipped).toEqual([]);
+    expect(leads.filter((l) => l.batch === 1)).toHaveLength(20);
+    expect(leads.filter((l) => l.batch === 2)).toHaveLength(15);
+    expect(leads.find((l) => l.firm === "LBMC")).toMatchObject({ firstName: "Drew", email: "drew.hendrickson@lbmc.com", batch: 2 });
+    for (const batch of [1, 2]) {
+      const sizes = new Set(text.split("\n").filter((r) => r.endsWith(`,${batch}`)).map((r) => r.split(",").at(-2)));
+      expect(sizes).toEqual(new Set(["Boutique", "Mid-size"]));
+    }
+  });
+
+  it("skips bad rows with a reason and keeps one contact per firm", () => {
+    const { leads, skipped } = parseAuditFirmsCsv(
+      "Firm,Email,First Name,Country,Batch\nA,info@a.com,,United States,1\nA2,sales@a.com,,United States,1\nB,not-an-email,,United States,1\nC,info@c.com,,United States,3\n",
+    );
+    expect(leads.map((l) => l.firm)).toEqual(["A"]);
+    expect(skipped.map((s) => s.reason)).toEqual(["duplicate_domain", "bad_email", "bad_batch"]);
   });
 });

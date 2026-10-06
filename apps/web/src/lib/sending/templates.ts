@@ -46,13 +46,17 @@ export const FIRM_TEMPLATE_REVISED_AT: Record<TemplateProduct, Date> = {
   TRUST: new Date("2026-09-30T12:50:00Z"),
 };
 
-export type TemplateAudience = "DIRECT" | "FIRM";
+// Same rule for the AUDITOR template (buildAuditFirmSequence, Trust only).
+export const AUDITOR_TEMPLATE_REVISED_AT = new Date("2026-10-06T05:25:00Z");
+
+export type TemplateAudience = "DIRECT" | "FIRM" | "AUDITOR";
 
 export function isStaleDraft(
   product: TemplateProduct,
   draftUpdatedAt: Date,
   audience: TemplateAudience = "DIRECT",
 ): boolean {
+  if (audience === "AUDITOR") return draftUpdatedAt < AUDITOR_TEMPLATE_REVISED_AT;
   const revised = audience === "FIRM" ? FIRM_TEMPLATE_REVISED_AT : TEMPLATE_REVISED_AT;
   return draftUpdatedAt < revised[product];
 }
@@ -352,6 +356,57 @@ How does ${co} handle this across clients today? Even a two-line reply would hel
 ${sig}`,
     },
     { stepNumber: 4, subject, body: leave },
+  ];
+}
+
+// AUDITOR campaigns write to audit firms (CPA firms that issue SOC 2 reports),
+// offering to list them as a Korrali Trust audit partner. Trust only, and the
+// whole text is fixed: no AI sentence, so no writer cost. Every claim is backed
+// by Trust code — the customer picks a firm at checkout and the firm invoices
+// the audit itself (trust actions/checkout.ts), and the referral fee is 0 by
+// default (AuditFirm.referralFeePct). Never say "audit included": that is only
+// true once a firm has signed.
+export function buildAuditFirmSequence(ctx: Pick<TemplateContext, "firstName" | "company">): TemplateStep[] {
+  const p = PRODUCT.TRUST;
+  const hi = greeting(ctx.firstName);
+  const sig = signature("TRUST");
+  const co = ctx.company;
+  const subject = `Audit partnership: ${co} and Korrali Trust`;
+  return [
+    {
+      stepNumber: 1,
+      subject,
+      body: `${hi}
+
+I'm Ashish, founder of Korrali Trust, a platform that helps startups prepare for SOC 2, ISO 27001 and ISO 42001. I'd like to offer ${co} a partnership.
+
+How it would work:
+- We list ${co} as an audit partner, so our customers can choose you for their audit when they sign up.
+- The customer contracts with you and pays you directly, at the price you set. Korrali Trust takes no cut of your fees and charges you nothing.
+- Clients arrive with evidence collected continuously from their cloud, code and identity tools, with dated history and approved policies. Your team gets a free auditor workspace for each client.
+- It's non-exclusive, so it sits alongside any partnerships you already have.
+
+We're an early company, so I won't promise volume.
+
+You can see the product here: ${p.link}
+
+If this is of interest, just reply to this email and I'll send the details.
+
+${sig}`,
+    },
+    {
+      stepNumber: 2,
+      subject,
+      body: `${hi}
+
+Following up on my note about listing ${co} as an audit partner on Korrali Trust. In short: no fee to you, no cut of your audit fees, non-exclusive, and the customer pays you directly.
+
+If someone else at ${co} looks after partnerships, I'd be grateful if you could forward this. A reply here reaches me directly.
+
+${p.link}
+
+${sig}`,
+    },
   ];
 }
 
