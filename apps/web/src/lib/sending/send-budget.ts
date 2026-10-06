@@ -16,12 +16,16 @@ import { prisma } from "@/lib/db";
 // prospects and founder alerts never use the budget.
 
 // One-off totals the founder set for single days (server-local date; prod runs
-// in UTC), above the warm-up schedule: 60 on the two days the audit-firm
-// batches go out, so those 20 emails don't come out of Revenue's and Trust's
-// share. A day not listed follows the schedule.
+// in UTC), above the warm-up schedule, so the audit-firm emails don't come out
+// of Revenue's and Trust's share. A day not listed follows the schedule.
+// The audit-firm campaign has weight 100 against the others' 200, so it gets a
+// third of the day's total: each figure is the schedule's total for the others
+// times 1.5. It only sends what is due, so real volume stays below the figure.
 export const CAP_OVERRIDES: Record<string, number> = {
-  "2026-10-06": 60,
-  "2026-10-13": 60,
+  "2026-10-06": 60, // batch 1: 20 first emails; others keep 40
+  "2026-10-12": 75, // batch 1 follow-ups (20); others keep 50
+  "2026-10-13": 60, // batch 2: 15 first emails
+  "2026-10-19": 90, // batch 2 follow-ups (15); others keep 60
 };
 
 function dayKey(d: Date): string {

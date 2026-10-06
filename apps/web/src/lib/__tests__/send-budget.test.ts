@@ -83,11 +83,14 @@ describe("one-off day totals and audit-firm batches", () => {
     { id: "cpa", dailyLimit: 100, audience: "AUDITOR" },
   ];
 
-  it("raises the total to 60 on the two batch days only", async () => {
+  it("raises the total on the batch and follow-up days only", async () => {
     mockPrisma.emailMessage.findFirst.mockResolvedValue({ sentAt: new Date("2026-09-25T08:00:00Z") });
     expect(await globalDailyCap(BATCH_DAY)).toBe(60);
     expect(await globalDailyCap(new Date("2026-10-13T15:00:00Z"))).toBe(60);
     expect(await globalDailyCap(new Date("2026-10-07T15:00:00Z"))).toBe(40);
+    expect(await globalDailyCap(new Date("2026-10-12T15:00:00Z"))).toBe(75);
+    expect(await globalDailyCap(new Date("2026-10-19T15:00:00Z"))).toBe(90);
+    expect(await globalDailyCap(new Date("2026-10-20T15:00:00Z"))).toBe(60);
   });
 
   it("gives the audit-firm batch 20 of the 60 and leaves the others their 40", async () => {
