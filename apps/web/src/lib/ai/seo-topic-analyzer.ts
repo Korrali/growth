@@ -217,6 +217,9 @@ Identify top SEO article opportunities. Each topic must:
 - Map clearly to one of the products listed above (use its key)
 - Have commercial or informational search intent worth ranking for
 - Match the product's audience: B2B buyer queries for TRUST/REVENUE/BILLCLEAR, consumer health queries for MEDSCAN
+- Be a specific long-tail query (usually 5+ words, often a question) that a small, new site can realistically rank on page 1 for
+- NOT be a head term or a "best X tools/software" listicle — those queries are owned by Vanta, Drata, Stripe, Baremetrics and review sites, and our existing posts on them sit at position 60-80 with zero clicks
+- Prefer concrete problems with a single answer: an error code, a specific questionnaire question, a "how do I…" for a named situation, a comparison of two named things
 
 Only use the product keys listed above. Other Korrali products get their topics from a separate catalog-driven process — do not emit topics for them here.
 
