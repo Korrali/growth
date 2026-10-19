@@ -469,6 +469,26 @@ async function main() {
     });
     const covered = new Set(existing.map((e) => e.targetKeyword).filter(Boolean));
 
+    // Exact-keyword matching let near-duplicates through ("recover failed stripe
+    // payments" vs "how to recover failed payments" became five posts competing
+    // for one query). Treat a topic as covered when its keyword shares most of its
+    // meaningful words with an existing keyword for the same product.
+    const STOP = new Set(["a", "an", "the", "to", "for", "of", "and", "or", "in", "on", "your", "you", "how", "what", "why", "with", "is", "are", "do", "does", "my", "our", "can", "it", "vs", "guide", "best", "ways", "tips"]);
+    const words = (k: string) => new Set(k.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w && !STOP.has(w)).map((w) => w.replace(/s$/, "")));
+    const existingWords = existing
+      .filter((e) => e.targetKeyword)
+      .map((e) => ({ product: e.product, words: words(e.targetKeyword as string) }));
+    const nearDuplicate = (t: CachedTopic) => {
+      const tw = words(t.targetKeyword);
+      if (tw.size === 0) return false;
+      return existingWords.some((e) => {
+        if (e.product !== t.product || e.words.size === 0) return false;
+        let shared = 0;
+        for (const w of tw) if (e.words.has(w)) shared++;
+        return shared / Math.min(tw.size, e.words.size) >= 0.75;
+      });
+    };
+
     // How many articles each product has actually shipped — drives who picks first.
     const published = new Map<string, number>();
     for (const e of existing) {
@@ -482,7 +502,7 @@ async function main() {
     // backlog never emptied, so their topics were never reached.
     const buckets = new Map<string, CachedTopic[]>();
     for (const t of topics) {
-      if (covered.has(t.targetKeyword)) continue;
+      if (covered.has(t.targetKeyword) || nearDuplicate(t)) continue;
       const bucket = buckets.get(t.product) ?? [];
       bucket.push(t);
       buckets.set(t.product, bucket);
